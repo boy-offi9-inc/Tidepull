@@ -22,7 +22,7 @@
     "dev": "node src/cli.ts",
     "test": "node --test \"test/**/*.test.ts\"",
     "typecheck": "tsc --noEmit",
-    "build": "tsc -p tsconfig.build.json"
+    "build": "tsc -p tsconfig.build.json && node scripts/fix-dts.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
