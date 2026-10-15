@@ -12,3 +12,4 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build && node dist/cli.js --version
+      - run: npm run size   # fails if the core footprint grows past its budget

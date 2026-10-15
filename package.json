@@ -22,7 +22,9 @@
     "dev": "node src/cli.ts",
     "test": "node --test \"test/**/*.test.ts\"",
     "typecheck": "tsc --noEmit",
-    "build": "tsc -p tsconfig.build.json && node scripts/fix-dts.mjs"
+    "build": "tsc -p tsconfig.build.json && node scripts/fix-dts.mjs",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build",
+    "size": "node scripts/size.mjs dist/index.js --budget=48"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
