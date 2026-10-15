@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { directExtractor } from "../src/extractors/direct.ts";
+import { hlsExtractor } from "../src/extractors/hls.ts";
 import { Http } from "../src/core/http.ts";
 import { makeLog } from "../src/core/events.ts";
 import type { Ctx } from "../src/core/types.ts";
@@ -27,4 +28,15 @@ test("direct: reads size via HEAD, id/title from the file name", async () => {
 test("direct: HEAD rejected (405) falls back to a ranged GET", async () => {
   const info = await directExtractor.extract(new URL(`${fx.base}/nohead/clip.mp4`), ctx());
   assert.equal(info.formats[0].filesize, fx.file.length);
+});
+
+test("hls: master playlist becomes one format per variant", async () => {
+  const info = await hlsExtractor.extract(new URL(`${fx.base}/hls/master.m3u8`), ctx());
+  assert.deepEqual(info.formats.map((f) => [f.format_id, f.height, f.tbr, f.protocol]), [["hls-800", 360, 800, "hls"], ["hls-2000", 720, 2000, "hls"]]);
+  assert.equal(info.formats[0].vcodec, "avc1.4d401e");
+});
+
+test("hls: a media playlist becomes a single format", async () => {
+  const info = await hlsExtractor.extract(new URL(`${fx.base}/hls/noiv.m3u8`), ctx());
+  assert.deepEqual(info.formats.map((f) => f.format_id), ["hls"]);
 });
