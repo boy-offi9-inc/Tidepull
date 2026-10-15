@@ -12,10 +12,14 @@
   "bugs": {
     "url": "https://github.com/boy-offi9-inc/Tidepull/issues"
   },
+  "bin": {
+    "tidepull": "dist/cli.js"
+  },
   "engines": {
     "node": ">=22.18"
   },
   "scripts": {
+    "dev": "node src/cli.ts",
     "test": "node --test \"test/**/*.test.ts\"",
     "typecheck": "tsc --noEmit",
     "build": "tsc -p tsconfig.build.json"
