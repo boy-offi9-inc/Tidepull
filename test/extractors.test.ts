@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { directExtractor } from "../src/extractors/direct.ts";
+import { genericExtractor } from "../src/extractors/generic.ts";
 import { hlsExtractor } from "../src/extractors/hls.ts";
+import { buildRegistry } from "../src/extractors/index.ts";
 import { Http } from "../src/core/http.ts";
 import { makeLog } from "../src/core/events.ts";
 import type { Ctx } from "../src/core/types.ts";
@@ -39,4 +41,17 @@ test("hls: master playlist becomes one format per variant", async () => {
 test("hls: a media playlist becomes a single format", async () => {
   const info = await hlsExtractor.extract(new URL(`${fx.base}/hls/noiv.m3u8`), ctx());
   assert.deepEqual(info.formats.map((f) => f.format_id), ["hls"]);
+});
+
+test("generic: finds og:video and og:title in a page", async () => {
+  const info = await genericExtractor.extract(new URL(`${fx.base}/page.html`), ctx(buildRegistry()));
+  assert.equal(info.title, "My & Page");
+  assert.equal(info.formats.length, 1);
+  assert.ok(info.formats[0].url.endsWith("/media/clip.mp4"));
+});
+
+test("registry: plugins first, generic always last", () => {
+  const plugin = { name: "p", apiVersion: 1, extractors: [{ name: "mine", suitable: () => false, extract: async () => { throw new Error("n/a"); } }] };
+  assert.deepEqual(buildRegistry().map((e) => e.name), ["hls", "direct", "generic"]);
+  assert.deepEqual(buildRegistry([plugin]).map((e) => e.name), ["mine", "hls", "direct", "generic"]);
 });
