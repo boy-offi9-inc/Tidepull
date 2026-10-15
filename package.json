@@ -1,0 +1,50 @@
+{
+  "name": "tidepull",
+  "version": "0.1.0",
+  "description": "A minimal, from-scratch media downloader library: extractor plugins, yt-dlp-style format selection, resumable downloads.",
+  "type": "module",
+  "license": "MIT",
+  "homepage": "https://github.com/boy-offi9-inc/Tidepull#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/boy-offi9-inc/Tidepull.git"
+  },
+  "bugs": {
+    "url": "https://github.com/boy-offi9-inc/Tidepull/issues"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "test": "node --test \"test/**/*.test.ts\"",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.8.0"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "keywords": [
+    "downloader",
+    "video",
+    "hls",
+    "yt-dlp",
+    "m3u8",
+    "library",
+    "typescript"
+  ]
+}
