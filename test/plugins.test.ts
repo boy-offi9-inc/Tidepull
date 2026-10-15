@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, before, test } from "node:test";
+import dash from "../src/dash/index.ts";
 import { createTidepull, definePlugin, TidepullError } from "../src/index.ts";
 import { loadPlugins, validatePlugin } from "../src/loader.ts";
 
@@ -41,7 +42,9 @@ test("plugins: loaded from file/dir, take priority, are validated", async () => 
   const info = await g.extract("https://demo.invalid/watch");
   assert.equal(info.extractor, "demosite");
 
+  // DASH is opt-in: absent by default, present (and first) when the plugin is passed
   assert.deepEqual(createTidepull().extractors, ["hls", "direct", "generic"]);
+  assert.equal(createTidepull({ plugins: [dash] }).extractors[0], "dash");
 
   // .use() works at runtime too, and definePlugin is a typed identity
   const g2 = createTidepull().use(definePlugin({ name: "p2", apiVersion: 1, extractors: [{ name: "zzz", suitable: () => false, extract: async () => { throw new TidepullError("n/a"); } }] }));
