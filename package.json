@@ -30,6 +30,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./loader": {
+      "types": "./dist/loader.d.ts",
+      "import": "./dist/loader.js"
     }
   },
   "files": [
