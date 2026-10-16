@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, before, test } from "node:test";
@@ -49,4 +49,12 @@ test("cli: --progress-json emits NDJSON events on stdout; --plugin works", async
   assert.equal(evs.at(-1)?.type, "done");
   assert.ok(evs.some((e) => e.type === "progress"));
   assert.equal((await run("--plugin", path.join(dir, "missing.mjs"), `${fx.base}/media/clip.mp4`)).status, 1);
+});
+
+test("cli: --version matches package.json; --list-extractors needs no URL", async () => {
+  const pkg = JSON.parse(await readFile("package.json", "utf8"));
+  assert.equal((await run("--version")).stdout.trim(), pkg.version);
+  const list = await run("--list-extractors");
+  assert.equal(list.status, 0);
+  assert.deepEqual(list.stdout.trim().split("\n"), ["dash", "hls", "direct", "generic"]);
 });

@@ -2,7 +2,7 @@
  * Template for a site plugin. You can keep this file out-of-tree: drop a copy (as .ts or .mjs) into
  * ~/.config/tidepull/plugins/ (or pass --plugin ./my-site.ts), no rebuild of tidepull needed.
  *
- *   import { definePlugin } from "tidepull";
+ *   import { definePlugin } from "@boy-offi9-inc/tidepull";
  *
  * Contract:
  *   suitable(url)  cheap, synchronous, no network. Match on hostname/path.

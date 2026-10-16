@@ -1,4 +1,4 @@
-/** Loads plugins from disk (Node only). Opt-in: `import { loadPlugins } from "tidepull/loader"`. */
+/** Loads plugins from disk (Node only). Opt-in: `import { loadPlugins } from "@boy-offi9-inc/tidepull/loader"`. */
 import { readdir, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";

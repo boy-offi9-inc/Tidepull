@@ -1,7 +1,7 @@
 import { parseArgs } from "node:util";
 import { DEFAULT_FORMAT, selectFormats } from "./core/selector.ts";
 import { TidepullError, errMsg } from "./core/errors.ts";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import type { DownloadOptions } from "./core/pipeline.ts";
 import type { Info } from "./core/types.ts";
 import { createTidepull } from "./tidepull.ts";
@@ -11,7 +11,8 @@ import { table, fmtBytes } from "./ui/format.ts";
 import { Logger, shouldUseColor } from "./ui/log.ts";
 import { humanRenderer, jsonRenderer } from "./ui/render.ts";
 
-export const VERSION = "0.1.0";
+/** Read from package.json so it can never drift from the published version (works from src/ and dist/). */
+export const VERSION: string = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
 
 const HELP = `tidepull ${VERSION}: a minimal media downloader
 
@@ -138,7 +139,7 @@ export async function main(argv: string[]): Promise<number> {
     verbose: values.verbose,
     color: !values["no-color"] && shouldUseColor(),
   });
-  if (!positionals.length) {
+  if (!positionals.length && !values["list-extractors"]) {
     log.error("You must provide at least one URL. Try 'tidepull --help'.");
     return 2;
   }

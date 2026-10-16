@@ -1,6 +1,6 @@
 {
-  "name": "tidepull",
-  "version": "0.1.0",
+  "name": "@boy-offi9-inc/tidepull",
+  "version": "0.1.0-rc.0",
   "description": "A minimal, from-scratch media downloader library: extractor plugins, yt-dlp-style format selection, resumable downloads.",
   "type": "module",
   "license": "MIT",
@@ -22,8 +22,9 @@
     "dev": "node src/cli.ts",
     "test": "node --test \"test/**/*.test.ts\"",
     "typecheck": "tsc --noEmit",
-    "build": "tsc -p tsconfig.build.json && node scripts/fix-dts.mjs",
-    "prepublishOnly": "npm run typecheck && npm test && npm run build",
+    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.build.json && node scripts/fix-dts.mjs",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm run typecheck && npm test",
     "size": "node scripts/size.mjs dist/index.js --budget=48"
   },
   "devDependencies": {
@@ -51,6 +52,9 @@
     "README.md",
     "LICENSE"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "sideEffects": false,
   "keywords": [
     "downloader",
@@ -60,8 +64,5 @@
     "m3u8",
     "library",
     "typescript"
-  ],
-  "dependencies": {
-    "package-lock.json": "^1.0.0"
-  }
+  ]
 }

@@ -30,7 +30,7 @@ function run(bin: string, args: string[]): Promise<void> {
     let err = "";
     p.stderr.on("data", (d: Buffer) => (err += d.toString()));
     p.on("error", (e) => reject(new TidepullError(`Failed to run ffmpeg: ${e.message}`)));
-    p.on("close", (code) => (code === 0 ? resolve() : reject(new TidepullError(`ffmpeg failed: ${err.trim().split("\n").pop()}`))));
+    p.on("close", (code) => (code === 0 ? resolve() : reject(new TidepullError(`ffmpeg failed: ${err.trim().split("\n").slice(-3).join(" | ")}`))));
   });
 }
 

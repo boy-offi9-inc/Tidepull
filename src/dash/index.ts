@@ -1,6 +1,6 @@
 /**
  * Opt-in DASH (VOD) support.
- *   import dash from "tidepull/dash";
+ *   import dash from "@boy-offi9-inc/tidepull/dash";
  *   createTidepull({ plugins: [dash] });
  */
 import { TidepullError } from "../core/errors.ts";

@@ -60,7 +60,7 @@ export const genericExtractor: Extractor = {
       if (HLS_CT.test(ct)) return extractHls(u, ctx);
       if (DASH_CT.test(ct)) {
         const dash = ctx.extractors.find((e) => e.name === "dash");
-        if (!dash) throw new TidepullError('DASH manifest found; enable it with: import dash from "tidepull/dash"; createTidepull({ plugins: [dash] })');
+        if (!dash) throw new TidepullError('DASH manifest found; enable it with: import dash from "@boy-offi9-inc/tidepull/dash"; createTidepull({ plugins: [dash] })');
         return dash.extract(u, ctx);
       }
       const info = await extractDirect(u, ctx);

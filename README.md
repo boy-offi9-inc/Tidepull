@@ -2,8 +2,22 @@
 
 A minimal, from-scratch media downloader **library** (and CLI) for Node. Minimal by design: a ~22 KB minified core with no runtime dependencies today (~9 KB gzip), fully typed, no terminal code in the core. Everything that isn't needed by every user is opt-in.
 
+## Install
+
+```bash
+npm i @boy-offi9-inc/tidepull        # as a library
+npx @boy-offi9-inc/tidepull -F <url>   # or run the CLI without installing
+npm i -g @boy-offi9-inc/tidepull     # installs the `tidepull` command
+```
+
+Published under the `@boy-offi9-inc` npm scope; the command it installs is `tidepull`.
+
+Requires Node >= 22.18. ffmpeg is optional (only needed to merge video+audio or remux).
+
+## Use
+
 ```ts
-import { createTidepull } from "tidepull";
+import { createTidepull } from "@boy-offi9-inc/tidepull";
 
 const g = createTidepull();
 g.on((e) => e.type === "progress" && console.log(e.downloaded, e.total, e.speed));
@@ -26,8 +40,8 @@ await g.pull(url, { signal: ctl.signal });        // rejects with name === "Abor
 |---|---|
 | `createTidepull(opts?)` → `Tidepull` | `.extract(url)`, `.select(info, selector)`, `.download(info, opts)`, `.pull(url, opts)`, `.on(listener)`, `.use(plugin)`, `.extractors` |
 | `definePlugin`, `PLUGIN_API_VERSION` | write extractor plugins |
-| `tidepull/dash` *(opt-in)* | DASH VOD: `createTidepull({ plugins: [dash] })` |
-| `tidepull/loader` *(opt-in)* | `loadPlugins(paths)` / `loadPlugin(file)`: load plugins from disk |
+| `@boy-offi9-inc/tidepull/dash` *(opt-in)* | DASH VOD: `createTidepull({ plugins: [dash] })` |
+| `@boy-offi9-inc/tidepull/loader` *(opt-in)* | `loadPlugins(paths)` / `loadPlugin(file)`: load plugins from disk |
 | `selectFormats`, `renderTemplate`, `parseHlsMaster/Media` | the building blocks, usable standalone |
 | `Http`, `TidepullError` | redirect-safe, header-scoped HTTP client; error type |
 | types | `Info`, `Format`, `Extractor`, `TidepullEvent`, `DownloadOptions`, `TidepullPlugin`, ... |
@@ -40,7 +54,7 @@ CLI: `tidepull --progress-json URL` prints the same events as NDJSON on stdout.
 ## Plugins (fix a site without waiting for a release)
 ```ts
 // ~/.config/tidepull/plugins/mysite.ts   (or --plugin ./mysite.ts, or g.use(...))
-import { definePlugin } from "tidepull";
+import { definePlugin } from "@boy-offi9-inc/tidepull";
 export default definePlugin({
   name: "mysite", apiVersion: 1,
   extractors: [{
@@ -50,7 +64,7 @@ export default definePlugin({
   }],
 });
 ```
-Plugins run before built-ins; the generic fallback is always last. From disk: `import { loadPlugins } from "tidepull/loader"` (the CLI does this for you, and bundles DASH). A plugin targeting a different `apiVersion` is refused with a clear message instead of failing mysteriously. **Plugins execute with your privileges. Only load code you trust.** See `src/extractors/_template.ts`.
+Plugins run before built-ins; the generic fallback is always last. From disk: `import { loadPlugins } from "@boy-offi9-inc/tidepull/loader"` (the CLI does this for you, and bundles DASH). A plugin targeting a different `apiVersion` is refused with a clear message instead of failing mysteriously. **Plugins execute with your privileges. Only load code you trust.** See `src/extractors/_template.ts`.
 
 ## CLI
 ```bash
@@ -59,14 +73,14 @@ tidepull -f "bv*[height<=720]+ba/b" URL            # select + merge (needs ffmpe
 tidepull -o "%(title).60s [%(id)s].%(ext)s" -P ~/Videos URL
 tidepull -j URL | jq .formats                      # data on stdout, logs on stderr
 ```
-Node >= 22.18 runs the TypeScript source directly (`node src/cli.ts`); `npm run build` emits JS + `.d.ts`.
+From a clone, `node src/cli.ts <args>` runs the TypeScript source directly (Node >= 22.18); `npm run build` emits JS + `.d.ts`.
 
 ## What works today
 | Area | Status |
 |---|---|
 | Direct files | resumable (`.part` + `Range`), retries with backoff |
 | HLS VOD | master + media playlists, parallel segments written in order, AES-128 (explicit/default IV), fMP4 init maps, separate audio renditions |
-| DASH VOD (`.mpd`), opt-in via `tidepull/dash` (built into the CLI) | `SegmentTemplate` (`$Number%05d$`, `$Time$`, timelines, durations), `SegmentList`, single-file `SegmentBase`, nested `BaseURL`; encrypted (`ContentProtection`) representations are skipped, never decrypted |
+| DASH VOD (`.mpd`), opt-in via `@boy-offi9-inc/tidepull/dash` (built into the CLI) | `SegmentTemplate` (`$Number%05d$`, `$Time$`, timelines, durations), `SegmentList`, single-file `SegmentBase`, nested `BaseURL`; encrypted (`ContentProtection`) representations are skipped, never decrypted |
 | Generic page extractor | `og:video`, `<video>/<source>`, bare media URLs in HTML/JSON |
 | Format selector | `b bv bv* ba ba* w wv wa`, `+` merge, `/` fallback, `()` groups, `[height<=720]` `[filesize<?50M]` `[ext=mp4]` |
 | Output templates | `%(title)s`, `%(x\|default)s`, `%(title).50s`, sanitized |
@@ -78,18 +92,11 @@ The core does only what every user needs: extract → select → download, event
 
 | Import | Files | Raw | Gzip | Minified (gzip) |
 |---|---|---|---|---|
-| `tidepull` (core: direct, HLS, generic page, selector, templates, resume, merge) | 18 | 44.9 KB | 13.5 KB | 22 KB (9 KB) |
-| `tidepull/dash` (adds XML + MPD parsing) | +6 | +14 KB | +4.7 KB | +7 KB (+3 KB) |
-| `tidepull/loader` (plugins from disk) | +3 | +4 KB | +1.7 KB | n/a (Node only) |
+| `@boy-offi9-inc/tidepull` (core: direct, HLS, generic page, selector, templates, resume, merge) | 18 | 44.9 KB | 13.5 KB | 22 KB (9 KB) |
+| `@boy-offi9-inc/tidepull/dash` (adds XML + MPD parsing) | +6 | +14 KB | +4.7 KB | +7 KB (+3 KB) |
+| `@boy-offi9-inc/tidepull/loader` (plugins from disk) | +3 | +4 KB | +1.7 KB | n/a (Node only) |
 
-`npm run size` fails the build if the core grows past its budget. CLI and terminal UI are not part of `import "tidepull"`.
-
-## Design lineage
-| From | Kept | Our twist |
-|---|---|---|
-| **yt-dlp** | extractor registry + info dict, `-f` grammar, `-o` templates, `-F/-j/-g`, `.part` resume, plugin dirs | typed contract; selector is a real parser (usage errors, exit 2); versioned plugin API; no Python |
-| **ripgrep / gh** | stdout = data, stderr = humans; TTY-aware; `NO_COLOR`; stable exit codes | the *core* emits events and never prints. The terminal UI is just one subscriber |
-| **aria2 / curl** | parallel segments, retry/backoff, one redrawn progress line | ordered streaming to disk (bounded memory), 3 s sliding-window speed/ETA |
+`npm run size` fails the build if the core grows past its budget. CLI and terminal UI are not part of `import "@boy-offi9-inc/tidepull"`.
 
 ## Security model
 - **No shell, ever.** ffmpeg is spawned with argv arrays. There is deliberately no `--exec` and no `--netrc-cmd`-style hook; the command-injection CVEs in this space came from exactly those features.
