@@ -3,7 +3,7 @@ import type { Http } from "./http.ts";
 
 export type Protocol = "https" | "hls" | "dash";
 
-/** One downloadable stream. Mirrors the yt-dlp format dict, minus the baggage. */
+/** One downloadable stream. */
 export interface Format {
   format_id: string;
   url: string;

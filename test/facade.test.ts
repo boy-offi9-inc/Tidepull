@@ -145,3 +145,12 @@ test("headers: Tidepull never leaks a secret to a cross-origin media host", asyn
   await g2.pull(page, { paths: dir, output: "cross2.%(ext)s", overwrite: true });
   assert.ok(b.seen.some((r) => r.headers["x-token"] === "t0k3n"));
 });
+
+test("default output name: no redundant \"name [name]\" when title equals id", async () => {
+  const info = await extractInfo(`${fx.base}/media/clip.mp4`);
+  const out = await g.download(info, { paths: path.join(dir, "default-name") });
+  assert.equal(path.basename(out), "clip.mp4");
+  // a custom template is never rewritten
+  const custom = await g.download(info, { paths: path.join(dir, "default-name"), output: "%(title)s [%(id)s].%(ext)s", overwrite: true });
+  assert.equal(path.basename(custom), "clip [clip].mp4");
+});

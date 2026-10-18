@@ -1,4 +1,4 @@
-/** yt-dlp-style output templates: "%(title)s [%(id)s].%(ext)s", "%(uploader|unknown)s", "%(title).50s" */
+/** Output templates: "%(title)s [%(id)s].%(ext)s", "%(uploader|unknown)s", "%(title).50s". */
 
 export function sanitize(s: string): string {
   const cleaned = s

@@ -15,4 +15,8 @@ npm run typecheck
 - Any new HTTP code goes through `Http` (redirect policy + cancellation), never bare `fetch`.
 - Never pass user input through a shell. Spawn with argv arrays.
 
-Good first issues: DASH/MPD, origin-scoped headers, cookies (`--cookies`), HLS byte-ranges, playlists, subtitles, `--download-archive`, scheduled live-smoke CI.
+## Live checks
+
+A weekly workflow (`.github/workflows/live-smoke.yml`) takes every URL in `.github/live-targets.txt` (one per line, `#` for comments), extracts it, selects a format and range-requests the media. If a target stops working it opens (or updates) an issue labeled `live-smoke`, and closes it once everything passes again. Only add URLs you are allowed to download. You can also run it on demand from the Actions tab.
+
+Good first issues: live HLS/DASH, multi-period DASH, cookies (`--cookies`), HLS byte-ranges, playlists, subtitles, `--download-archive`.

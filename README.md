@@ -85,6 +85,7 @@ From a clone, `node src/cli.ts <args>` runs the TypeScript source directly (Node
 | Format selector | `b bv bv* ba ba* w wv wa`, `+` merge, `/` fallback, `()` groups, `[height<=720]` `[filesize<?50M]` `[ext=mp4]` |
 | Output templates | `%(title)s`, `%(x\|default)s`, `%(title).50s`, sanitized |
 | Merge / remux | ffmpeg |
+| Site-specific extractors | none built in. Platforms such as YouTube hide their media behind scripts and tokens and need a plugin (see Plugins) |
 | Not yet | live HLS/DASH, multi-period DASH, SAMPLE-AES, byte-range HLS/DASH, playlists, subtitles, cookies |
 
 ## Footprint (enforced in CI)

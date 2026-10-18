@@ -1,4 +1,4 @@
-import { downloadInfo, extractInfo, DEFAULT_OUTPUT, type DownloadOptions } from "./core/pipeline.ts";
+import { downloadInfo, extractInfo, type DownloadOptions } from "./core/pipeline.ts";
 import { abortError } from "./core/errors.ts";
 import { makeLog, type TidepullEvent } from "./core/events.ts";
 import { Http, type HttpOptions } from "./core/http.ts";
@@ -93,7 +93,7 @@ export class Tidepull {
     return this.guard(o.signal, () => extractInfo(url, this.ctx(o.signal)));
   }
 
-  /** Pure function: which format(s) would this selector pick? 2+ means "merge". undefined = no match. */
+  /** Which format(s) the selector picks (two or more means merge), or undefined if none match. */
   select(info: Info, selector: string = DEFAULT_FORMAT): Format[] | undefined {
     return selectFormats(selector, info.formats);
   }
@@ -103,7 +103,6 @@ export class Tidepull {
     const { signal, ...rest } = o;
     const opts: DownloadOptions = {
       format: DEFAULT_FORMAT,
-      output: DEFAULT_OUTPUT,
       paths: ".",
       resume: true,
       overwrite: false,

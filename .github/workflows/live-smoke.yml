@@ -1,0 +1,94 @@
+name: Live smoke
+
+# Weekly check that real URLs still extract and stream. Opens (or updates) an issue labeled
+# "live-smoke" when a target breaks, and closes it again when everything passes.
+on:
+  schedule:
+    - cron: "17 6 * * 1" # Mondays 06:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Probe live targets
+        id: probe
+        shell: bash
+        run: |
+          set -u
+          : > report.md
+          checked=0
+          failed=0
+          while IFS= read -r raw || [ -n "$raw" ]; do
+            url="$(printf '%s' "$raw" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+            case "$url" in "" | "#"*) continue ;; esac
+            checked=$((checked + 1))
+            echo "::group::$url"
+            reason=""
+            if ! node src/cli.ts -q -j "$url" > info.json 2> err.txt; then
+              reason="extraction failed: $(tail -n 1 err.txt)"
+            else
+              sel="$(node src/cli.ts -q -g "$url" 2>/dev/null || true)"
+              first="${sel%%$'\n'*}"
+              if [ -z "$first" ]; then
+                reason="no format could be selected"
+              elif ! curl -fsSL --max-time 30 -r 0-1023 -o /dev/null "$first"; then
+                reason="selected media URL is not reachable: $first"
+              fi
+            fi
+            if [ -n "$reason" ]; then
+              failed=$((failed + 1))
+              echo "FAILED: $reason"
+              printf -- '- `%s`: %s\n' "$url" "$reason" >> report.md
+            else
+              echo "ok ($(node -p 'JSON.parse(require("fs").readFileSync("info.json","utf8")).formats.length') format(s))"
+            fi
+            echo "::endgroup::"
+          done < .github/live-targets.txt
+          if [ "$checked" -eq 0 ]; then echo "::notice::No live targets configured (.github/live-targets.txt)"; fi
+          echo "checked=$checked" >> "$GITHUB_OUTPUT"
+          echo "failed=$failed" >> "$GITHUB_OUTPUT"
+
+      - name: Open or update the tracking issue
+        if: steps.probe.outputs.failed != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FAILED: ${{ steps.probe.outputs.failed }}
+          CHECKED: ${{ steps.probe.outputs.checked }}
+        run: |
+          gh label create live-smoke --color B60205 --description "Scheduled live-smoke failures" 2>/dev/null || true
+          {
+            echo "Scheduled live smoke test: **$FAILED of $CHECKED** target(s) failed."
+            echo
+            cat report.md
+            echo
+            echo "Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          } > issue.md
+          num="$(gh issue list --label live-smoke --state open --json number --jq '.[0].number // empty')"
+          if [ -n "$num" ]; then
+            gh issue comment "$num" --body-file issue.md
+          else
+            gh issue create --title "Live smoke test is failing" --label live-smoke --body-file issue.md
+          fi
+
+      - name: Close the tracking issue when everything passes
+        if: steps.probe.outputs.failed == '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHECKED: ${{ steps.probe.outputs.checked }}
+        run: |
+          num="$(gh issue list --label live-smoke --state open --json number --jq '.[0].number // empty')"
+          if [ -n "$num" ]; then gh issue close "$num" --comment "All live targets pass again ($CHECKED checked)."; fi
+
+      - name: Fail the job if any target failed
+        if: steps.probe.outputs.failed != '0'
+        run: exit 1

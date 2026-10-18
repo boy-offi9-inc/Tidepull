@@ -22,7 +22,7 @@ export const dashExtractor: Extractor = {
 
 export async function extractDash(url: URL, ctx: Ctx): Promise<Info> {
   const { text, finalUrl } = await ctx.http.text(url.href);
-  if (text.length > MAX_MPD_BYTES) throw new TidepullError("Manifest is unreasonably large");
+  if (text.length > MAX_MPD_BYTES) throw new TidepullError("Manifest is too large");
   const mpd = parseMpd(text, finalUrl);
   if (mpd.dynamic) throw new TidepullError("Live DASH streams are not supported yet");
   if (mpd.periods > 1) ctx.log.warn(`Manifest has ${mpd.periods} periods; only the first is used`);
@@ -38,7 +38,7 @@ export async function extractDash(url: URL, ctx: Ctx): Promise<Info> {
 
   const formats: Format[] = [];
   for (const r of mpd.reps) {
-    if (r.kind === "other") continue; // subtitles etc.: not yet
+    if (r.kind === "other") continue; // subtitles and other tracks are not supported
     const { v, a } = splitCodecs(r.codecs);
     const video = r.kind === "video";
     const f: Format = {

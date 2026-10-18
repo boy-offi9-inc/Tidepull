@@ -50,6 +50,10 @@ test("generic: finds og:video and og:title in a page", async () => {
   assert.ok(info.formats[0].url.endsWith("/media/clip.mp4"));
 });
 
+test("generic: a page without media explains what to do", async () => {
+  await assert.rejects(genericExtractor.extract(new URL(`${fx.base}/empty.html`), ctx(buildRegistry())), /needs its own extractor plugin.*Built in/);
+});
+
 test("registry: plugins first, generic always last", () => {
   const plugin = { name: "p", apiVersion: 1, extractors: [{ name: "mine", suitable: () => false, extract: async () => { throw new Error("n/a"); } }] };
   assert.deepEqual(buildRegistry().map((e) => e.name), ["hls", "direct", "generic"]);

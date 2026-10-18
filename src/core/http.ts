@@ -24,7 +24,7 @@ export interface RequestInitLite {
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 const REDIRECT = new Set([301, 302, 303, 307, 308]);
-/** Never secret: always sent wherever we connect. Everything else is "scoped" (see HttpOptions.headerHosts). */
+/** Sent to every host. All other custom headers are scoped (see HttpOptions.headerHosts). */
 const OPEN_HEADERS = new Set(["user-agent", "accept", "accept-language", "accept-encoding", "range", "referer", "origin"]);
 
 const hostMatches = (pattern: string, host: string): boolean =>

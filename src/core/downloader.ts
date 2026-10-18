@@ -33,7 +33,7 @@ export async function downloadHttp(url: string, dest: string, o: DownloadOpts & 
   const res = await o.http.request(url, { headers, signal: o.signal });
 
   if (res.status === 416) {
-    // Range not satisfiable: the .part is either already complete or garbage.
+    // Range not satisfiable: the .part is either complete or stale.
     await res.body?.cancel();
     const total = /\*\/(\d+)/.exec(res.headers.get("content-range") ?? "")?.[1];
     if (total && Number(total) === offset) {
@@ -56,7 +56,7 @@ export async function downloadHttp(url: string, dest: string, o: DownloadOpts & 
     const m = /bytes (\d+)-\d+\/(\d+)/.exec(res.headers.get("content-range") ?? "");
     total = m ? Number(m[2]) : undefined;
   } else {
-    offset = 0; // server ignored Range (or fresh start): overwrite
+    offset = 0; // no usable Range response: start over
     const cl = res.headers.get("content-length");
     total = cl ? Number(cl) : undefined;
   }
@@ -142,7 +142,7 @@ export async function downloadSegments(segments: SegmentRef[], dest: string, o: 
   const inflight: Array<Promise<Buffer> | undefined> = new Array(n);
   const start = (i: number) => {
     inflight[i] = fetchSeg(i);
-    inflight[i]!.catch(() => {}); // surfaced when awaited in order
+    inflight[i]!.catch(() => {}); // handled when awaited in order
   };
 
   let ext: "ts" | "mp4" = "ts";

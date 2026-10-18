@@ -1,5 +1,5 @@
 /**
- * yt-dlp-style format selector.
+ * Format selector syntax.
  *   b / best        best pre-merged format        bv / bestvideo   best video-only
  *   w / worst       worst pre-merged format       ba / bestaudio   best audio-only
  *   bv* / ba*       best with video / with audio  <format_id>      exact id

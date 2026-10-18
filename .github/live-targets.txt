@@ -1,0 +1,7 @@
+# Public media URLs that the weekly live-smoke workflow should keep working.
+# One URL per line. Lines starting with # and blank lines are ignored.
+# Only add URLs you are allowed to download (your own files, open-licensed streams, ...).
+#
+# https://example.com/path/to/video.mp4
+# https://example.com/path/to/master.m3u8
+# https://example.com/path/to/manifest.mpd

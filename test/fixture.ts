@@ -62,6 +62,7 @@ high/index.m3u8
     const p = url.pathname;
     seen.push({ path: p, headers: req.headers });
     if (p === "/flaky") return ++flakyHits === 1 ? send(res, 503, "busy") : send(res, 200, "ok", "text/plain");
+    if (p === "/empty.html") return send(res, 200, "<html><title>x</title><body>nothing here</body></html>", "text/html");
     if (p === "/page-cross.html") {
       const v = url.searchParams.get("v") ?? "";
       return send(res, 200, `<!doctype html><title>Cross</title><meta property="og:video" content="${v}">`, "text/html");

@@ -13,8 +13,8 @@ export const DEFAULT_OUTPUT = "%(title)s [%(id)s].%(ext)s";
 export interface DownloadOptions {
   /** format selector, default "bv*+ba/b" */
   format: string;
-  /** output template, default "%(title)s [%(id)s].%(ext)s" */
-  output: string;
+  /** output template. Default: "%(title)s [%(id)s].%(ext)s", or just the title when the id is identical (typical for direct files) */
+  output?: string;
   /** base directory */
   paths: string;
   /** resume from .part files */
@@ -47,7 +47,7 @@ export async function extractInfo(rawUrl: string, ctx: Ctx): Promise<Info> {
   return info;
 }
 
-/** Drop undefined keys so events stay clean JSON (NDJSON consumers shouldn't see "speed": undefined / missing-vs-null ambiguity). */
+/** Drops undefined keys so events serialize cleanly. */
 const compact = <T extends object>(o: T): T => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as T;
 
 const scalars = (o: object): Record<string, unknown> =>
@@ -72,7 +72,9 @@ export async function downloadInfo(info: Info, opts: DownloadOptions, ctx: Ctx):
     resolution: chosen[0].height ? `${chosen[0].width ?? "?"}x${chosen[0].height}` : "audio only",
     ext: predictedExt,
   };
-  let target = path.resolve(opts.paths, renderTemplate(opts.output, fields));
+  // Default name: just the title when it equals the id (direct files).
+  const template = opts.output ?? (String(info.title) === String(info.id) ? "%(title)s.%(ext)s" : DEFAULT_OUTPUT);
+  let target = path.resolve(opts.paths, renderTemplate(template, fields));
   await mkdir(path.dirname(target), { recursive: true });
 
   const exists = await stat(target).then(() => true, () => false);
@@ -112,7 +114,7 @@ export async function downloadInfo(info: Info, opts: DownloadOptions, ctx: Ctx):
   if (!merging) {
     const ext = await fetchOne(chosen[0], target);
     if (ext !== path.extname(target).slice(1)) {
-      const fixed = `${base}.${ext}`; // e.g. HLS turned out to be fMP4
+      const fixed = `${base}.${ext}`; // the real container can differ from the predicted one (e.g. fMP4 HLS)
       await rename(target, fixed);
       target = fixed;
     }

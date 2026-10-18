@@ -14,7 +14,7 @@ export type TidepullEvent =
 
 export type Emit = (e: TidepullEvent) => void;
 
-/** What extractors see. Deliberately tiny. */
+/** Logging interface exposed to extractors. */
 export interface Log {
   debug(msg: string): void;
   info(tag: string, msg: string): void;

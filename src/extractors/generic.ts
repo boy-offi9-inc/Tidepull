@@ -92,7 +92,10 @@ export const genericExtractor: Extractor = {
         ctx.log.debug(`generic: skipped ${c}: ${errMsg(e)}`);
       }
     }
-    if (!formats.length) throw new TidepullError(`Unable to find any media on ${url.href} (no site-specific extractor matched)`);
+    if (!formats.length) throw new TidepullError(
+        `No downloadable media found on ${url.hostname}. This looks like a site that needs its own extractor plugin (see README, Plugins). ` +
+          "Built in: direct media files, HLS, DASH and pages that embed them.",
+      );
 
     const id = (await sha(pageUrl)).slice(0, 10);
     return { id, title: title || id, extractor: "generic", webpage_url: pageUrl, thumbnail, formats };

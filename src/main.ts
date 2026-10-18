@@ -11,7 +11,7 @@ import { table, fmtBytes } from "./ui/format.ts";
 import { Logger, shouldUseColor } from "./ui/log.ts";
 import { humanRenderer, jsonRenderer } from "./ui/render.ts";
 
-/** Read from package.json so it can never drift from the published version (works from src/ and dist/). */
+/** Package version, read from package.json. */
 export const VERSION: string = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
 
 const HELP = `tidepull ${VERSION}: a minimal media downloader
@@ -24,7 +24,8 @@ Selection:
   -F, --list-formats         List available formats and exit
 
 Output:
-  -o, --output TEMPLATE      Output template (default: "%(title)s [%(id)s].%(ext)s")
+  -o, --output TEMPLATE      Output template (default: "%(title)s [%(id)s].%(ext)s",
+                             or just the title when the id is the same)
   -P, --paths DIR            Download directory (default: .)
   -w, --overwrite            Overwrite existing files
       --no-continue          Do not resume partial downloads

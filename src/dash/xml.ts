@@ -1,4 +1,4 @@
-/** Minimal, dependency-free XML parser: elements, attributes, text. No DTD/entity expansion (so no billion-laughs). Namespace prefixes are dropped. */
+/** Minimal XML parser: elements, attributes and text. DTDs and custom entities are not expanded; namespace prefixes are dropped. */
 import { TidepullError } from "../core/errors.ts";
 
 export interface XNode {
