@@ -4,6 +4,7 @@ import { TidepullError, errMsg } from "./core/errors.ts";
 import { existsSync, readFileSync } from "node:fs";
 import type { DownloadOptions } from "./core/pipeline.ts";
 import type { Info } from "./core/types.ts";
+import { Archive, configArgs, parseRate, readUrlList } from "./cliutil.ts";
 import { createTidepull } from "./tidepull.ts";
 import dash from "./dash/index.ts";
 import { defaultPluginDir, loadPlugins } from "./loader.ts";
@@ -44,7 +45,16 @@ Plugins:
       --plugin PATH          Load a plugin file or directory (repeatable). Plugins run with your privileges!
       --no-plugins           Skip auto-loading ~/.config/tidepull/plugins (or $TIDEPULL_PLUGIN_DIR)
 
+Input:
+  -a, --batch-file FILE      Read URLs from FILE, one per line ("-" = stdin, # starts a comment)
+      --download-archive FILE  Skip items listed in FILE; record new ones after downloading
+
+Config:
+      --config-location FILE Read options from FILE (default: ~/.config/tidepull/config)
+      --no-config            Do not read a config file
+
 Network:
+      --limit-rate RATE      Maximum download speed per file, e.g. 500K or 1.5M
   -N, --concurrent-fragments N   HLS segments fetched in parallel (default: 4)
   -R, --retries N                Retries per request (default: 3)
       --header "Name: value"     Extra request header (repeatable). Secret-looking headers (Authorization,
@@ -91,7 +101,7 @@ export async function main(argv: string[]): Promise<number> {
   let positionals: string[];
   function parse() {
     return parseArgs({
-      args: argv,
+      args,
       allowPositionals: true,
       options: {
         format: { type: "string", short: "f" },
@@ -119,11 +129,23 @@ export async function main(argv: string[]): Promise<number> {
         "progress-json": { type: "boolean" },
         plugin: { type: "string", multiple: true },
         "no-plugins": { type: "boolean" },
+        "batch-file": { type: "string", short: "a" },
+        "download-archive": { type: "string" },
+        "limit-rate": { type: "string" },
+        "config-location": { type: "string" },
+        "no-config": { type: "boolean" },
         "no-color": { type: "boolean" },
         help: { type: "boolean", short: "h" },
         version: { type: "boolean" },
       },
     });
+  }
+  let args = argv;
+  try {
+    args = [...configArgs(argv), ...argv];
+  } catch (e) {
+    process.stderr.write(`ERROR: ${errMsg(e)}\n`);
+    return e instanceof TidepullError ? e.exitCode : 2;
   }
   try {
     ({ values, positionals } = parse());
@@ -140,7 +162,18 @@ export async function main(argv: string[]): Promise<number> {
     verbose: values.verbose,
     color: !values["no-color"] && shouldUseColor(),
   });
-  if (!positionals.length && !values["list-extractors"]) {
+  const urls = [...positionals];
+  let limitRate: number | undefined;
+  let archive: Archive | undefined;
+  try {
+    if (values["batch-file"]) urls.push(...readUrlList(values["batch-file"]));
+    if (values["limit-rate"]) limitRate = parseRate(values["limit-rate"]);
+    if (values["download-archive"]) archive = new Archive(values["download-archive"]);
+  } catch (e) {
+    log.error(errMsg(e));
+    return e instanceof TidepullError ? e.exitCode : 1;
+  }
+  if (!urls.length && !values["list-extractors"]) {
     log.error("You must provide at least one URL. Try 'tidepull --help'.");
     return 2;
   }
@@ -191,6 +224,7 @@ export async function main(argv: string[]): Promise<number> {
     mergeFormat: values["merge-output-format"],
     remuxVideo: values["remux-video"],
     headers,
+    limitRate,
   };
   for (const k of Object.keys(opts) as Array<keyof typeof opts>) if (opts[k] === undefined) delete opts[k];
 
@@ -201,7 +235,7 @@ export async function main(argv: string[]): Promise<number> {
 
   let code = 0;
   try {
-    for (const url of positionals) {
+    for (const url of urls) {
       try {
         const info = await tp.extract(url, { signal: ctl.signal });
         if (values["dump-json"]) process.stdout.write(JSON.stringify(info) + "\n");
@@ -214,8 +248,11 @@ export async function main(argv: string[]): Promise<number> {
           for (const f of chosen) process.stdout.write(f.url + "\n");
         } else if (values.simulate) {
           log.tag("info", `${info.title} (${info.formats.length} format(s))`);
+        } else if (archive?.has(info)) {
+          log.tag("download", `${info.title}: already in the archive, skipping`);
         } else {
           const file = await tp.download(info, { ...opts, signal: ctl.signal });
+          archive?.add(info);
           if (values["print-path"]) process.stdout.write(file + "\n");
         }
       } catch (e) {

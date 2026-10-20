@@ -1,6 +1,6 @@
 import { mkdir, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
-import { downloadDash, downloadHls, downloadHttp, type Progress } from "./downloader.ts";
+import { downloadDash, downloadHls, downloadHttp, RateLimiter, type Progress } from "./downloader.ts";
 import { TidepullError } from "./errors.ts";
 import { findFfmpeg, mergeStreams, remux } from "./ffmpeg.ts";
 import { Meter } from "./meter.ts";
@@ -29,6 +29,8 @@ export interface DownloadOptions {
   ffmpeg?: string;
   /** extra request headers for the media downloads */
   headers: Record<string, string>;
+  /** maximum average download speed in bytes per second (applies to each file) */
+  limitRate?: number;
 }
 
 export async function extractInfo(rawUrl: string, ctx: Ctx): Promise<Info> {
@@ -100,7 +102,8 @@ export async function downloadInfo(info: Info, opts: DownloadOptions, ctx: Ctx):
       const eta = speed && p.total ? (p.total - p.downloaded) / speed : undefined;
       ctx.emit(compact({ type: "progress" as const, format_id: f.format_id, ...p, speed, eta }));
     };
-    const common = { http: ctx.http, headers: { ...f.http_headers, ...opts.headers }, signal: ctx.signal, onProgress };
+    const limiter = opts.limitRate ? new RateLimiter(opts.limitRate) : undefined;
+    const common = { http: ctx.http, headers: { ...f.http_headers, ...opts.headers }, signal: ctx.signal, limiter, onProgress };
     let ext = f.ext;
     if (f.protocol === "hls") ({ ext } = await downloadHls(f.url, dest, { ...common, concurrency: opts.concurrency }));
     else if (f.protocol === "dash") ({ ext } = await downloadDash(f, dest, { ...common, concurrency: opts.concurrency }));

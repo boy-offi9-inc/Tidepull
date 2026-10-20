@@ -35,6 +35,8 @@ setTimeout(() => ctl.abort(), 5000);
 await g.pull(url, { signal: ctl.signal });        // rejects with name === "AbortError"
 ```
 
+Cap the speed with `limitRate` (bytes per second, applied to each file): `g.download(info, { limitRate: 1_000_000 })`.
+
 ## API (everything else is internal)
 | Export | Purpose |
 |---|---|
@@ -72,7 +74,14 @@ tidepull -F URL                                    # list formats
 tidepull -f "bv*[height<=720]+ba/b" URL            # select + merge (needs ffmpeg)
 tidepull -o "%(title).60s [%(id)s].%(ext)s" -P ~/Videos URL
 tidepull -j URL | jq .formats                      # data on stdout, logs on stderr
+tidepull -a urls.txt --download-archive done.txt   # batch input; skip what you already downloaded
+tidepull --limit-rate 1M URL                       # cap the speed (500K, 1.5M, ...)
 ```
+
+**Batch and archive.** `-a FILE` reads one URL per line (`#` starts a comment, `-` reads stdin). `--download-archive FILE` records each finished item and skips it on later runs.
+
+**Config file.** Defaults go in `~/.config/tidepull/config` (or `--config-location FILE`): one or more options per line, `#` for comments, for example `-P ~/Videos` and `--limit-rate 2M`. Options on the command line win; `--no-config` ignores the file.
+
 From a clone, `node src/cli.ts <args>` runs the TypeScript source directly (Node >= 22.18); `npm run build` emits JS + `.d.ts`.
 
 ## What works today

@@ -45,7 +45,7 @@ export class Http {
 
   constructor(o: HttpOptions = {}) {
     this.headers = {
-      "User-Agent": o.userAgent ?? "Mozilla/5.0 (compatible; tidepull/0.1)",
+      "User-Agent": o.userAgent ?? "Mozilla/5.0 (compatible; tidepull)",
       "Accept-Language": "en-US,en;q=0.9",
     };
     this.secret = {};

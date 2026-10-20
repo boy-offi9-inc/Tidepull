@@ -1,6 +1,7 @@
 import { createDecipheriv } from "node:crypto";
 import { createWriteStream } from "node:fs";
 import { rename, rm, stat } from "node:fs/promises";
+import { setTimeout as sleep } from "node:timers/promises";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { ReadableStream as WebReadableStream } from "node:stream/web";
@@ -15,10 +16,27 @@ export interface Progress {
   estimated?: boolean;
 }
 
+/** Caps average throughput at `rate` bytes per second by delaying callers. */
+export class RateLimiter {
+  private rate: number;
+  private start = Date.now();
+  private sent = 0;
+
+  constructor(rate: number) {
+    this.rate = rate;
+  }
+  async take(bytes: number, signal?: AbortSignal): Promise<void> {
+    this.sent += bytes;
+    const wait = this.start + (this.sent / this.rate) * 1000 - Date.now();
+    if (wait > 0) await sleep(wait, undefined, { signal });
+  }
+}
+
 export interface DownloadOpts {
   http: Http;
   headers?: Record<string, string>;
   signal?: AbortSignal;
+  limiter?: RateLimiter;
   onProgress: (p: Progress) => void;
 }
 
@@ -69,8 +87,20 @@ export async function downloadHttp(url: string, dest: string, o: DownloadOpts & 
       cb(null, chunk);
     },
   });
+  const limiter = o.limiter;
+  const throttle = new Transform({
+    async transform(chunk: Buffer, _enc, cb) {
+      try {
+        await limiter?.take(chunk.length, o.signal);
+        cb(null, chunk);
+      } catch (e) {
+        cb(e as Error);
+      }
+    },
+  });
   await pipeline(
     Readable.fromWeb(res.body as unknown as WebReadableStream<Uint8Array>),
+    throttle,
     counter,
     createWriteStream(part, { flags: append ? "a" : "w" }),
     { signal: o.signal },
@@ -163,6 +193,7 @@ export async function downloadSegments(segments: SegmentRef[], dest: string, o: 
         lastMap = map;
         ext = "mp4";
       }
+      await o.limiter?.take(buf.length, o.signal);
       await write(buf);
       bytes += buf.length;
       if (next < n) start(next++);

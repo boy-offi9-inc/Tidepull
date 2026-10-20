@@ -154,3 +154,11 @@ test("default output name: no redundant \"name [name]\" when title equals id", a
   const custom = await g.download(info, { paths: path.join(dir, "default-name"), output: "%(title)s [%(id)s].%(ext)s", overwrite: true });
   assert.equal(path.basename(custom), "clip [clip].mp4");
 });
+
+test("limitRate option slows a library download", async () => {
+  const info = await extractInfo(`${fx.base}/media/clip.mp4`);
+  const t0 = Date.now();
+  const out = await g.download(info, { paths: path.join(dir, "limited"), limitRate: 2_000_000 }); // ~1 MiB at 2 MB/s
+  assert.ok(Date.now() - t0 >= 400, `took ${Date.now() - t0} ms`);
+  assert.ok((await readFile(out)).equals(fx.file));
+});
