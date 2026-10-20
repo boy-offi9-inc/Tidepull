@@ -91,17 +91,24 @@ high/index.m3u8
       return void res.end();
     }
     if (p === "/media/slow.mp4") {
-      // 1 MiB delivered in 10 chunks, 100ms apart
+      // Headers go out immediately; the body (1 MiB in 10 chunks, 100 ms apart) starts after ?delay=<ms>.
       res.writeHead(200, { "content-length": file.length, "content-type": "video/mp4" });
+      res.flushHeaders();
       let i = 0;
-      const t = setInterval(() => {
-        res.write(file.subarray(i * 104858, Math.min((i + 1) * 104858, file.length)));
-        if (++i === 10) {
-          clearInterval(t);
-          res.end(file.subarray(10 * 104858));
-        }
-      }, 100);
-      res.on("close", () => clearInterval(t));
+      let ticker: NodeJS.Timeout | undefined;
+      const begin = setTimeout(() => {
+        ticker = setInterval(() => {
+          res.write(file.subarray(i * 104858, Math.min((i + 1) * 104858, file.length)));
+          if (++i === 10) {
+            clearInterval(ticker);
+            res.end(file.subarray(10 * 104858));
+          }
+        }, 100);
+      }, Number(url.searchParams.get("delay") ?? 0));
+      res.on("close", () => {
+        clearTimeout(begin);
+        clearInterval(ticker);
+      });
       return;
     }
 
@@ -141,4 +148,13 @@ high/index.m3u8
     seen,
     close: () => new Promise<void>((r) => (server.closeAllConnections(), server.close(() => r()))),
   };
+}
+
+/** Polls until `cond` is true. Use instead of fixed sleeps so tests do not depend on machine speed. */
+export async function waitFor(cond: () => Promise<boolean> | boolean, timeoutMs = 15_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!(await cond())) {
+    if (Date.now() > deadline) throw new Error(`waitFor timed out after ${timeoutMs} ms`);
+    await new Promise((r) => setTimeout(r, 20));
+  }
 }

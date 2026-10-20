@@ -5,7 +5,7 @@ import path from "node:path";
 import { after, before, test } from "node:test";
 import { RateLimiter, downloadHls, downloadHttp } from "../src/core/downloader.ts";
 import { Http } from "../src/core/http.ts";
-import { startFixture, type Fixture } from "./fixture.ts";
+import { startFixture, waitFor, type Fixture } from "./fixture.ts";
 
 let fx: Fixture;
 let dir: string;
@@ -37,13 +37,30 @@ test("http: resumes from .part with a Range request", async () => {
   assert.ok(fx.ranges.includes("bytes=300000-"), `ranges seen: ${fx.ranges.join(",")}`);
 });
 
-test("http: aborting keeps the .part, and the next run completes the file", async () => {
+const partSize = async (file: string) => (await stat(file).catch(() => undefined))?.size ?? -1;
+
+test("http: aborting mid-download keeps the bytes already written, and the next run completes the file", async () => {
   const dest = path.join(dir, "slow.bin");
   const ctl = new AbortController();
   const p = downloadHttp(`${fx.base}/media/slow.mp4`, dest, { ...base, resume: true, signal: ctl.signal });
-  setTimeout(() => ctl.abort(), 250);
-  await assert.rejects(p);
-  assert.ok((await stat(dest + ".part")).size > 0);
+  p.catch(() => {});
+  await waitFor(async () => (await partSize(dest + ".part")) > 0); // wait for real data on disk, not a fixed delay
+  ctl.abort();
+  await assert.rejects(p, (e: Error) => e.name === "AbortError");
+  assert.ok((await partSize(dest + ".part")) > 0);
+  await downloadHttp(`${fx.base}/media/slow.mp4`, dest, { ...base, resume: true });
+  assert.ok((await readFile(dest)).equals(fx.file));
+});
+
+test("http: aborting before the first byte leaves an empty .part, and the next run still completes", async () => {
+  const dest = path.join(dir, "early.bin");
+  const ctl = new AbortController();
+  const p = downloadHttp(`${fx.base}/media/slow.mp4?delay=5000`, dest, { ...base, resume: true, signal: ctl.signal });
+  p.catch(() => {});
+  await waitFor(async () => (await partSize(dest + ".part")) >= 0); // headers arrived, body has not started
+  ctl.abort();
+  await assert.rejects(p, (e: Error) => e.name === "AbortError");
+  assert.equal(await partSize(dest + ".part"), 0);
   await downloadHttp(`${fx.base}/media/slow.mp4`, dest, { ...base, resume: true });
   assert.ok((await readFile(dest)).equals(fx.file));
 });

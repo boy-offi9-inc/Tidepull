@@ -6,7 +6,7 @@ import path from "node:path";
 import { after, before, test } from "node:test";
 import { findFfmpeg } from "../src/core/ffmpeg.ts";
 import { createTidepull, type DownloadOptions, type Info, type TidepullEvent } from "../src/index.ts";
-import { startFixture, type Fixture } from "./fixture.ts";
+import { startFixture, waitFor, type Fixture } from "./fixture.ts";
 
 let fx: Fixture;
 let b: Fixture;
@@ -109,15 +109,19 @@ test("events: start -> progress -> finish -> done, all JSON-serializable", async
   await g.pull(`${fx.base}/media/clip.mp4`, { paths: dir, output: "ev2.%(ext)s", overwrite: true });
 });
 
-test("abort: cancels an in-flight download quickly and keeps the .part for resume", async () => {
+test("abort: cancels an in-flight download promptly and keeps the .part for resume", async () => {
   const g = createTidepull();
   const ctl = new AbortController();
-  const t0 = Date.now();
+  const part = path.join(dir, "slow.mp4.part");
+  const size = async () => (await stat(part).catch(() => undefined))?.size ?? 0;
   const p = g.pull(`${fx.base}/media/slow.mp4`, { paths: dir, output: "slow.%(ext)s", overwrite: true, signal: ctl.signal });
-  setTimeout(() => ctl.abort(), 250);
+  p.catch(() => {});
+  await waitFor(async () => (await size()) > 0); // abort once data is really on disk
+  const t0 = Date.now();
+  ctl.abort();
   await assert.rejects(p, (e: Error) => e.name === "AbortError");
-  assert.ok(Date.now() - t0 < 1500, "abort should be prompt");
-  assert.ok((await stat(path.join(dir, "slow.mp4.part"))).size > 0, ".part kept");
+  assert.ok(Date.now() - t0 < 2000, "abort should be prompt");
+  assert.ok((await size()) > 0, ".part kept");
   // ...and a later run resumes it to a byte-exact file
   const file = await g.pull(`${fx.base}/media/slow.mp4`, { paths: dir, output: "slow.%(ext)s", overwrite: true });
   assert.ok((await readFile(file)).equals(fx.file));
