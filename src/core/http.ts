@@ -14,6 +14,8 @@ export interface HttpOptions {
    * Referer, Origin, User-Agent, Accept-* and Range are never considered secret and are always sent.
    */
   headerHosts?: string[];
+  /** Returns the Cookie header value for a URL (see "@boy-offi9-inc/tidepull/cookies"). Called on every request and redirect hop. */
+  cookies?: (url: URL) => string | undefined;
 }
 
 export interface RequestInitLite {
@@ -37,6 +39,7 @@ export class Http {
   private secret: Record<string, string>;
   private scopedMode: boolean;
   private hostPatterns: string[];
+  private cookies?: (url: URL) => string | undefined;
   private trusted = new Set<string>();
   retries: number;
   timeoutMs: number;
@@ -55,6 +58,7 @@ export class Http {
     }
     this.scopedMode = o.headerHosts !== undefined;
     this.hostPatterns = (o.headerHosts ?? []).map((h) => h.toLowerCase());
+    this.cookies = o.cookies;
     this.retries = o.retries ?? 3;
     this.timeoutMs = o.timeoutMs ?? 30_000;
     this.maxRedirects = o.maxRedirects ?? 10;
@@ -107,7 +111,12 @@ export class Http {
     for (let hop = 0; ; hop++) {
       // per-request headers (Range, extractor-supplied Referer/Cookie...) only travel with the start origin; Range goes everywhere
       const own = Object.fromEntries(Object.entries(init.headers ?? {}).filter(([k]) => cur.origin === start.origin || k.toLowerCase() === "range"));
-      const headers = { ...this.headersFor(cur, start), ...own };
+      const headers: Record<string, string> = { ...this.headersFor(cur, start), ...own };
+      const cookie = this.cookies?.(cur);
+      if (cookie) {
+        for (const k of Object.keys(headers)) if (k.toLowerCase() === "cookie") delete headers[k];
+        headers.Cookie = cookie;
+      }
       const ctl = new AbortController();
       const timer = setTimeout(() => ctl.abort(), this.timeoutMs);
       const signal = init.signal ? AbortSignal.any([ctl.signal, init.signal]) : ctl.signal;

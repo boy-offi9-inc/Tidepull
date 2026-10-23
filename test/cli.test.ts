@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, before, test } from "node:test";
@@ -113,4 +113,27 @@ test("cli: --limit-rate is validated and slows the download", async () => {
   const t0 = Date.now();
   assert.equal((await run("-q", "-P", dir, "-o", "slow.%(ext)s", "-w", "--limit-rate", "1M", url)).status, 0); // 1 MiB at 1 MiB/s
   assert.ok(Date.now() - t0 >= 900, `took ${Date.now() - t0} ms`);
+});
+
+test("cli: --cookies unlocks a login-protected file, warns about open permissions, and never prints the cookie", { skip: process.platform === "win32" }, async () => {
+  const url = `${fx.base}/private/clip.mp4`;
+  const jar = path.join(dir, "cookies.txt");
+  const bad = path.join(dir, "bad-cookies.txt");
+  await writeFile(jar, "# Netscape HTTP Cookie File\n127.0.0.1\tFALSE\t/\tFALSE\t0\tsession\ts3cr3t9f3a\n");
+  await writeFile(bad, "127.0.0.1\tFALSE\t/\tFALSE\t0\tsession\twrong\n");
+  await chmod(jar, 0o600);
+  await chmod(bad, 0o600);
+
+  assert.equal((await run("-q", "-P", dir, "-o", "locked1.%(ext)s", url)).status, 1, "no cookies: refused");
+  assert.equal((await run("-q", "--cookies", bad, "-P", dir, "-o", "locked2.%(ext)s", url)).status, 1, "wrong cookie: refused");
+  const ok = await run("-v", "--cookies", jar, "-P", dir, "-o", "locked3.%(ext)s", url);
+  assert.equal(ok.status, 0);
+  assert.ok(existsSync(path.join(dir, "locked3.mp4")));
+  assert.ok(!(ok.stdout + ok.stderr).includes("s3cr3t9f3a"), "the cookie value must never appear in output");
+  const info = await run("-q", "-j", "--cookies", jar, url);
+  assert.ok(!info.stdout.toLowerCase().includes("cookie"), "-j output must not contain cookies");
+
+  await chmod(jar, 0o644);
+  assert.match((await run("-q", "--cookies", jar, "-P", dir, "-o", "locked4.%(ext)s", url)).stderr, /chmod 600/);
+  assert.equal((await run("--cookies", path.join(dir, "missing.txt"), url)).status, 2);
 });

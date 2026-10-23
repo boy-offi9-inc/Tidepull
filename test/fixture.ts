@@ -21,7 +21,10 @@ const enc = (data: Buffer, key: Buffer, iv: Buffer) => {
 export async function startFixture(): Promise<Fixture> {
   const file = randomBytes(1024 * 1024);
   const key = randomBytes(16);
-  const files = new Map<string, Buffer>([["/media/clip.mp4", file]]);
+  const files = new Map<string, Buffer>([
+    ["/media/clip.mp4", file],
+    ["/private/clip.mp4", file],
+  ]);
   const ranges: string[] = [];
   const seen: Array<{ path: string; headers: IncomingHttpHeaders }> = [];
 
@@ -61,6 +64,7 @@ high/index.m3u8
     const url = new URL(req.url ?? "/", "http://x");
     const p = url.pathname;
     seen.push({ path: p, headers: req.headers });
+    if (p.startsWith("/private/") && !/(^|;\s*)session=s3cr3t9f3a(;|$)/.test(String(req.headers.cookie ?? ""))) return send(res, 403, "login required", "text/plain");
     if (p === "/flaky") return ++flakyHits === 1 ? send(res, 503, "busy") : send(res, 200, "ok", "text/plain");
     if (p === "/empty.html") return send(res, 200, "<html><title>x</title><body>nothing here</body></html>", "text/html");
     if (p === "/page-cross.html") {

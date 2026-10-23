@@ -44,6 +44,7 @@ Cap the speed with `limitRate` (bytes per second, applied to each file): `g.down
 | `definePlugin`, `PLUGIN_API_VERSION` | write extractor plugins |
 | `@boy-offi9-inc/tidepull/dash` *(opt-in)* | DASH VOD: `createTidepull({ plugins: [dash] })` |
 | `@boy-offi9-inc/tidepull/loader` *(opt-in)* | `loadPlugins(paths)` / `loadPlugin(file)`: load plugins from disk |
+| `@boy-offi9-inc/tidepull/cookies` *(opt-in)* | `parseCookies`, `loadCookieFile`, `cookieJar`: `createTidepull({ http: { cookies: cookieJar(cookies) } })` |
 | `selectFormats`, `renderTemplate`, `parseHlsMaster/Media` | the building blocks, usable standalone |
 | `Http`, `TidepullError` | redirect-safe, header-scoped HTTP client; error type |
 | types | `Info`, `Format`, `Extractor`, `TidepullEvent`, `DownloadOptions`, `TidepullPlugin`, ... |
@@ -76,7 +77,10 @@ tidepull -o "%(title).60s [%(id)s].%(ext)s" -P ~/Videos URL
 tidepull -j URL | jq .formats                      # data on stdout, logs on stderr
 tidepull -a urls.txt --download-archive done.txt   # batch input; skip what you already downloaded
 tidepull --limit-rate 1M URL                       # cap the speed (500K, 1.5M, ...)
+tidepull --cookies cookies.txt URL                 # use your own logged-in session
 ```
+
+**Cookies.** `--cookies FILE` reads a Netscape `cookies.txt` (the format browser extensions export). Each cookie is sent only to the host, path and scheme it was issued for. Keep the file private (`chmod 600`); you get a warning if other users can read it.
 
 **Batch and archive.** `-a FILE` reads one URL per line (`#` starts a comment, `-` reads stdin). `--download-archive FILE` records each finished item and skips it on later runs.
 
@@ -84,8 +88,25 @@ tidepull --limit-rate 1M URL                       # cap the speed (500K, 1.5M, 
 
 From a clone, `node src/cli.ts <args>` runs the TypeScript source directly (Node >= 22.18); `npm run build` emits JS + `.d.ts`.
 
-## What works today
-| Area | Status |
+## Capabilities and limits
+
+**What Tidepull does**
+- Downloads direct media files, HLS (VOD, AES-128) and DASH (VOD) streams, and pages that embed them
+- Resumes interrupted downloads, caps speed, retries with backoff and cancels cleanly
+- Merges separate video and audio, or remuxes, with ffmpeg
+- Selects formats (`bv*[height<=720]+ba/b`) and names files from templates
+- Uses your own cookies (`--cookies`) and headers, sending them only to the hosts they belong to
+- Works as a CLI or a typed library with JSON events; support for a specific site is added through plugins
+
+**What it does not do**
+- No site-specific extractors are built in. Platforms such as YouTube hide their media behind scripts and tokens and need a plugin
+- No DRM: protected streams (Widevine, PlayReady, FairPlay, encrypted DASH) are not supported and will not be
+- No circumvention: it cannot get past logins, paywalls or geo-blocks. With `--cookies` it only fetches what your own session can already see
+- Not implemented yet: live streams, multi-period DASH (first period only), SAMPLE-AES, byte-range HLS/DASH, subtitles, playlists, a proxy option
+- Cookies are read-only: `Set-Cookie` responses are not stored
+
+### Details
+| Area | Behavior |
 |---|---|
 | Direct files | resumable (`.part` + `Range`), retries with backoff |
 | HLS VOD | master + media playlists, parallel segments written in order, AES-128 (explicit/default IV), fMP4 init maps, separate audio renditions |
@@ -93,9 +114,9 @@ From a clone, `node src/cli.ts <args>` runs the TypeScript source directly (Node
 | Generic page extractor | `og:video`, `<video>/<source>`, bare media URLs in HTML/JSON |
 | Format selector | `b bv bv* ba ba* w wv wa`, `+` merge, `/` fallback, `()` groups, `[height<=720]` `[filesize<?50M]` `[ext=mp4]` |
 | Output templates | `%(title)s`, `%(x\|default)s`, `%(title).50s`, sanitized |
+| Cookies | Netscape `cookies.txt`; matched by domain, path, `Secure` and expiry; re-evaluated on every redirect hop |
+| CLI conveniences | `-a` batch input, `--download-archive`, `--limit-rate`, `--config-location` |
 | Merge / remux | ffmpeg |
-| Site-specific extractors | none built in. Platforms such as YouTube hide their media behind scripts and tokens and need a plugin (see Plugins) |
-| Not yet | live HLS/DASH, multi-period DASH, SAMPLE-AES, byte-range HLS/DASH, playlists, subtitles, cookies |
 
 ## Footprint (enforced in CI)
 The core does only what every user needs: extract → select → download, events, cancellation. Everything else is a plugin or an opt-in subpath.
@@ -110,8 +131,9 @@ The core does only what every user needs: extract → select → download, event
 
 ## Security model
 - **No shell, ever.** ffmpeg is spawned with argv arrays. There is deliberately no `--exec` and no `--netrc-cmd`-style hook; the command-injection CVEs in this space came from exactly those features.
-- **Redirect-safe HTTP.** Redirects are followed manually: on a cross-origin hop everything except `User-Agent/Accept*/Range` is dropped (Authorization, Cookie, custom tokens), non-http(s) targets are refused, loops are capped.
+- **Redirect-safe HTTP.** Redirects are followed manually and headers are recomputed on every hop: secrets and per-request headers stay with their own host, non-http(s) targets are refused, loops are capped.
 - **Origin-scoped secrets.** Custom headers like `Authorization`, `Cookie` or API tokens (`--header` / `http.headers`) are sent only to the origins you pass to `extract()`/`pull()`, plus any `--header-host` / `http.headerHosts` patterns (`cdn.example.com`, `*.example.com`). `Referer`, `Origin`, `Accept*`, `User-Agent` and `Range` are never treated as secret. Using one `Tidepull` instance for several sites trusts all of them, so use one instance per credential. The low-level `Http` class (without `headerHosts`) sends headers to each request's start origin only.
+- **Per-host cookies.** `--cookies` sends each cookie only to the host, path and scheme it was issued for (`Secure` cookies never go over http). A cookie with a single-label domain such as `.com` is treated as host-only. Cookie values are never logged and never appear in `-j` output.
 - Output filenames are built from sanitized fields only. Only `http(s)` URLs are accepted.
 
 ## Legal

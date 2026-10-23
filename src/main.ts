@@ -5,6 +5,7 @@ import { existsSync, readFileSync } from "node:fs";
 import type { DownloadOptions } from "./core/pipeline.ts";
 import type { Info } from "./core/types.ts";
 import { Archive, configArgs, parseRate, readUrlList } from "./cliutil.ts";
+import { cookieJar, loadCookieFile } from "./cookies.ts";
 import { createTidepull } from "./tidepull.ts";
 import dash from "./dash/index.ts";
 import { defaultPluginDir, loadPlugins } from "./loader.ts";
@@ -55,6 +56,7 @@ Config:
 
 Network:
       --limit-rate RATE      Maximum download speed per file, e.g. 500K or 1.5M
+      --cookies FILE         Send cookies from a Netscape cookies.txt file, only to the hosts they belong to
   -N, --concurrent-fragments N   HLS segments fetched in parallel (default: 4)
   -R, --retries N                Retries per request (default: 3)
       --header "Name: value"     Extra request header (repeatable). Secret-looking headers (Authorization,
@@ -132,6 +134,7 @@ export async function main(argv: string[]): Promise<number> {
         "batch-file": { type: "string", short: "a" },
         "download-archive": { type: "string" },
         "limit-rate": { type: "string" },
+        cookies: { type: "string" },
         "config-location": { type: "string" },
         "no-config": { type: "boolean" },
         "no-color": { type: "boolean" },
@@ -165,10 +168,16 @@ export async function main(argv: string[]): Promise<number> {
   const urls = [...positionals];
   let limitRate: number | undefined;
   let archive: Archive | undefined;
+  let cookies: ReturnType<typeof cookieJar> | undefined;
   try {
     if (values["batch-file"]) urls.push(...readUrlList(values["batch-file"]));
     if (values["limit-rate"]) limitRate = parseRate(values["limit-rate"]);
     if (values["download-archive"]) archive = new Archive(values["download-archive"]);
+    if (values.cookies) {
+      const loaded = loadCookieFile(values.cookies);
+      if (loaded.warning) log.warn(loaded.warning);
+      cookies = cookieJar(loaded.cookies);
+    }
   } catch (e) {
     log.error(errMsg(e));
     return e instanceof TidepullError ? e.exitCode : 1;
@@ -202,7 +211,7 @@ export async function main(argv: string[]): Promise<number> {
   }
 
   const tp = createTidepull({
-    http: { headers, headerHosts: values["header-host"] ?? [], userAgent: values["user-agent"], retries: num(values.retries, 3) },
+    http: { headers, headerHosts: values["header-host"] ?? [], userAgent: values["user-agent"], retries: num(values.retries, 3), cookies },
     plugins: [...plugins, dash],
     ffmpeg: values["ffmpeg-location"],
   });
