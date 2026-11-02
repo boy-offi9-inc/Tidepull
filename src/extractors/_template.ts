@@ -6,6 +6,8 @@
  * Contract:
  *   suitable(url)  cheap and synchronous, no network; match on hostname or path.
  *   extract(url)   return an Info with at least one Format; throw TidepullError for user-facing failures.
+ *                  A page that lists several items can return { kind: "playlist", id, title, extractor, webpage_url, entries: [{ url, title? }] }
+ *                  instead; each entry is then extracted on its own.
  *   apiVersion     must equal PLUGIN_API_VERSION, otherwise the loader rejects the plugin.
  *
  * Formats:

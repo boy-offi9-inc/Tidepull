@@ -6,6 +6,7 @@ export interface Fixture {
   base: string;
   file: Buffer;
   plainSegs: Buffer[];
+  eps: Buffer[];
   noivSegs: Buffer[];
   files: Map<string, Buffer>;
   ranges: string[];
@@ -21,9 +22,13 @@ const enc = (data: Buffer, key: Buffer, iv: Buffer) => {
 export async function startFixture(): Promise<Fixture> {
   const file = randomBytes(1024 * 1024);
   const key = randomBytes(16);
+  const eps = [randomBytes(50_000), randomBytes(60_000), randomBytes(70_000)];
   const files = new Map<string, Buffer>([
     ["/media/clip.mp4", file],
     ["/private/clip.mp4", file],
+    ["/media/ep1.mp3", eps[0]],
+    ["/media/ep2.mp3", eps[1]],
+    ["/media/ep3.mp3", eps[2]],
   ]);
   const ranges: string[] = [];
   const seen: Array<{ path: string; headers: IncomingHttpHeaders }> = [];
@@ -67,6 +72,36 @@ high/index.m3u8
     if (p.startsWith("/private/") && !/(^|;\s*)session=s3cr3t9f3a(;|$)/.test(String(req.headers.cookie ?? ""))) return send(res, 403, "login required", "text/plain");
     if (p === "/flaky") return ++flakyHits === 1 ? send(res, 503, "busy") : send(res, 200, "ok", "text/plain");
     if (p === "/empty.html") return send(res, 200, "<html><title>x</title><body>nothing here</body></html>", "text/html");
+    const origin = `http://${req.headers.host}`;
+    const rss = (items: string) =>
+      `<?xml version="1.0"?><rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/"><channel><title>My Show</title>${items}</channel></rss>`;
+    const item = (title: string, url: string, type = "audio/mpeg") => `<item><title><![CDATA[${title}]]></title><enclosure url="${url}" type="${type}" length="1"/></item>`;
+    if (p === "/feed.xml") {
+      return send(res, 200, rss(
+        item("Episode one", `${origin}/media/ep1.mp3`) + item("Episode two", "media/ep2.mp3") + item("Episode: three?", `${origin}/media/ep3.mp3`) +
+          item("Cover art", `${origin}/cover.jpg`, "image/jpeg") + item("Episode one again", `${origin}/media/ep1.mp3`),
+      ), "application/rss+xml");
+    }
+    if (p === "/feed-broken.xml") return send(res, 200, rss(item("Good one", `${origin}/media/ep1.mp3`) + item("Gone", `${origin}/media/missing.mp3`) + item("Good two", `${origin}/media/ep2.mp3`)), "application/rss+xml");
+    if (p === "/feed-cross.xml") {
+      const m = url.searchParams.get("m") ?? origin;
+      return send(res, 200, rss(item("Cross one", `${m}/media/ep1.mp3`) + item("Cross two", `${m}/media/ep2.mp3`)), "application/rss+xml");
+    }
+    if (p === "/feed-empty.xml") return send(res, 200, rss("<item><title>No media here</title></item>"), "application/rss+xml");
+    if (p === "/odd/podcast") return send(res, 200, rss(item("Odd one", `${origin}/media/ep1.mp3`) + item("Odd two", `${origin}/media/ep2.mp3`)), "application/rss+xml");
+    if (p === "/not-a-feed.xml") return send(res, 200, "<html><body>hello</body></html>", "text/xml");
+    if (p === "/atom.xml") {
+      return send(res, 200, `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"><title>Atom Show</title>
+        <entry><title>Atom one</title><link rel="alternate" href="${origin}/page"/><link rel="enclosure" type="audio/mpeg" href="${origin}/media/ep1.mp3"/></entry>
+        <entry><title>Atom two</title><link rel="enclosure" href="/media/ep2.mp3"/></entry></feed>`, "application/atom+xml");
+    }
+    if (p === "/list.m3u") {
+      return send(res, 200, `#EXTM3U\n#PLAYLIST:Mix tape\n#EXTINF:10,First song\n/media/ep1.mp3\n#EXTINF:10,Second song\n${origin}/media/ep2.mp3\nfile:///etc/passwd\n`, "audio/x-mpegurl");
+    }
+    if (p === "/noext/audio") {
+      res.writeHead(200, { "content-type": "audio/mpeg", "content-length": eps[0].length });
+      return void res.end(req.method === "HEAD" ? undefined : eps[0]);
+    }
     if (p === "/page-cross.html") {
       const v = url.searchParams.get("v") ?? "";
       return send(res, 200, `<!doctype html><title>Cross</title><meta property="og:video" content="${v}">`, "text/html");
@@ -146,6 +181,7 @@ high/index.m3u8
     base: `http://127.0.0.1:${port}`,
     file,
     plainSegs,
+    eps,
     noivSegs,
     files,
     ranges,

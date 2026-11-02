@@ -3,6 +3,7 @@ import { after, before, test } from "node:test";
 import { directExtractor } from "../src/extractors/direct.ts";
 import { genericExtractor } from "../src/extractors/generic.ts";
 import { hlsExtractor } from "../src/extractors/hls.ts";
+import { isPlaylist } from "../src/core/pipeline.ts";
 import { buildRegistry } from "../src/extractors/index.ts";
 import { Http } from "../src/core/http.ts";
 import { makeLog } from "../src/core/events.ts";
@@ -45,6 +46,7 @@ test("hls: a media playlist becomes a single format", async () => {
 
 test("generic: finds og:video and og:title in a page", async () => {
   const info = await genericExtractor.extract(new URL(`${fx.base}/page.html`), ctx(buildRegistry()));
+  assert.ok(!isPlaylist(info));
   assert.equal(info.title, "My & Page");
   assert.equal(info.formats.length, 1);
   assert.ok(info.formats[0].url.endsWith("/media/clip.mp4"));

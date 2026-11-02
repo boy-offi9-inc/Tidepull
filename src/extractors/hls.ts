@@ -3,11 +3,11 @@ import { isMasterPlaylist, parseMaster } from "../core/hls.ts";
 import type { Ctx, Extractor, Format, Info } from "../core/types.ts";
 import { extOf, splitCodecs, stem } from "./util.ts";
 
-export const hlsExtractor: Extractor = {
+export const hlsExtractor = {
   name: "hls",
   suitable: (url) => extOf(url.pathname) === "m3u8",
   extract: (url, ctx) => extractHls(url, ctx),
-};
+} satisfies Extractor;
 
 export async function extractHls(url: URL, ctx: Ctx): Promise<Info> {
   const { text, finalUrl } = await ctx.http.text(url.href);

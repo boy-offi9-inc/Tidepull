@@ -14,11 +14,11 @@ const MAX_MPD_BYTES = 5 * 1024 * 1024;
 const extFor = (mime: string, kind: string): string =>
   mime.includes("webm") ? "webm" : mime.startsWith("audio/") || kind === "audio" ? "m4a" : "mp4";
 
-export const dashExtractor: Extractor = {
+export const dashExtractor = {
   name: "dash",
   suitable: (url) => extOf(url.pathname) === "mpd",
   extract: (url, ctx) => extractDash(url, ctx),
-};
+} satisfies Extractor;
 
 export async function extractDash(url: URL, ctx: Ctx): Promise<Info> {
   const { text, finalUrl } = await ctx.http.text(url.href);

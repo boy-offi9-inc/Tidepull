@@ -53,9 +53,25 @@ export interface Ctx {
   signal?: AbortSignal;
 }
 
+/** One item of a playlist. It is extracted on its own when it is downloaded. */
+export interface PlaylistEntry {
+  url: string;
+  title?: string;
+}
+
+/** A list of items found at one URL (a feed, a playlist file). */
+export interface Playlist {
+  kind: "playlist";
+  id: string;
+  title: string;
+  extractor: string;
+  webpage_url: string;
+  entries: PlaylistEntry[];
+}
+
 /** The extractor contract. One file per site. */
 export interface Extractor {
   readonly name: string;
   suitable(url: URL): boolean;
-  extract(url: URL, ctx: Ctx): Promise<Info>;
+  extract(url: URL, ctx: Ctx): Promise<Info | Playlist>;
 }

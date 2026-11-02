@@ -62,7 +62,7 @@ test("cli: --version matches package.json; --list-extractors needs no URL", asyn
   assert.equal((await run("--version")).stdout.trim(), pkg.version);
   const list = await run("--list-extractors");
   assert.equal(list.status, 0);
-  assert.deepEqual(list.stdout.trim().split("\n"), ["dash", "hls", "direct", "generic"]);
+  assert.deepEqual(list.stdout.trim().split("\n"), ["dash", "rss", "m3u", "hls", "direct", "generic"]);
 });
 
 test("cli: --batch-file reads URLs (comments and blanks skipped); '-' reads stdin", async () => {
@@ -136,4 +136,47 @@ test("cli: --cookies unlocks a login-protected file, warns about open permission
   await chmod(jar, 0o644);
   assert.match((await run("-q", "--cookies", jar, "-P", dir, "-o", "locked4.%(ext)s", url)).stderr, /chmod 600/);
   assert.equal((await run("--cookies", path.join(dir, "missing.txt"), url)).status, 2);
+});
+
+test("cli: playlists: -j and -F list entries without downloading; --playlist-items selects", async () => {
+  const feed = `${fx.base}/feed.xml`;
+  const pl = JSON.parse((await run("-q", "-j", feed)).stdout);
+  assert.equal(pl.kind, "playlist");
+  assert.equal(pl.entries.length, 3);
+  const table = (await run("-q", "-F", feed)).stdout;
+  assert.match(table, /Episode one/);
+  assert.match(table, /ep3\.mp3/);
+
+  const out = path.join(dir, "pl");
+  assert.equal((await run("-q", "-P", out, "--playlist-items", "1,3", feed)).status, 0);
+  assert.ok(existsSync(path.join(out, "01 - Episode one.mp3")));
+  assert.ok(existsSync(path.join(out, "03 - Episode_ three_.mp3")));
+  assert.ok(!existsSync(path.join(out, "02 - Episode two.mp3")));
+  assert.equal((await run("-q", "--playlist-items", "x", feed)).status, 2);
+  const m3u = JSON.parse((await run("-q", "-j", `${fx.base}/list.m3u`)).stdout);
+  assert.deepEqual(m3u.entries.map((e: { title: string }) => e.title), ["First song", "Second song"]);
+});
+
+test("cli: one failing playlist item does not stop the others (exit code 1)", async () => {
+  const out = path.join(dir, "broken");
+  const r = await run("-P", out, `${fx.base}/feed-broken.xml`);
+  assert.equal(r.status, 1);
+  assert.ok(existsSync(path.join(out, "01 - Good one.mp3")));
+  assert.ok(existsSync(path.join(out, "03 - Good two.mp3")));
+  assert.match(r.stderr, /404/);
+});
+
+test("cli: --download-archive works per playlist item, and --progress-json reports playlist events", async () => {
+  const feed = `${fx.base}/feed.xml`;
+  const arch = path.join(dir, "playlist-archive.txt");
+  assert.equal((await run("-q", "-P", path.join(dir, "arc1"), "--download-archive", arch, feed)).status, 0);
+  assert.equal((await readFile(arch, "utf8")).trim().split("\n").length, 3);
+  const again = await run("-P", path.join(dir, "arc2"), "--download-archive", arch, feed);
+  assert.equal(again.status, 0);
+  assert.equal((again.stderr.match(/already in the archive/g) ?? []).length, 3);
+  assert.ok(!existsSync(path.join(dir, "arc2")), "nothing is downloaded the second time");
+
+  const ev = await run("--progress-json", "-P", path.join(dir, "ev"), "--playlist-items", "1", feed);
+  const types = ev.stdout.trim().split("\n").map((l) => JSON.parse(l).type);
+  assert.ok(types.includes("playlist") && types.includes("item") && types.at(-1) === "done");
 });

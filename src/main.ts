@@ -3,9 +3,12 @@ import { DEFAULT_FORMAT, selectFormats } from "./core/selector.ts";
 import { TidepullError, errMsg } from "./core/errors.ts";
 import { existsSync, readFileSync } from "node:fs";
 import type { DownloadOptions } from "./core/pipeline.ts";
-import type { Info } from "./core/types.ts";
+import { isPlaylist } from "./core/pipeline.ts";
+import type { Info, Playlist } from "./core/types.ts";
 import { Archive, configArgs, parseRate, readUrlList } from "./cliutil.ts";
 import { cookieJar, loadCookieFile } from "./cookies.ts";
+import feeds from "./feeds.ts";
+import { playlistFields, resolveItems } from "./playlist.ts";
 import { createTidepull } from "./tidepull.ts";
 import dash from "./dash/index.ts";
 import { defaultPluginDir, loadPlugins } from "./loader.ts";
@@ -23,7 +26,8 @@ Usage: tidepull [options] URL [URL...]
 Selection:
   -f, --format FORMAT        Format selector (default: ${DEFAULT_FORMAT})
                                e.g. "bv*[height<=720]+ba/b", "ba", "hls-1200"
-  -F, --list-formats         List available formats and exit
+  -F, --list-formats         List available formats and exit (for a playlist: its entries)
+      --playlist-items SPEC  Playlist items to download, e.g. 1-3,7,10- (default: all)
 
 Output:
   -o, --output TEMPLATE      Output template (default: "%(title)s [%(id)s].%(ext)s",
@@ -98,6 +102,12 @@ function listFormats(info: Info): string {
   return table(rows);
 }
 
+function listEntries(p: Playlist): string {
+  const rows = [["#", "TITLE", "URL"]];
+  p.entries.forEach((e, i) => rows.push([String(i + 1), e.title ?? "", e.url]));
+  return table(rows);
+}
+
 export async function main(argv: string[]): Promise<number> {
   let values: ReturnType<typeof parse>["values"];
   let positionals: string[];
@@ -137,6 +147,7 @@ export async function main(argv: string[]): Promise<number> {
         cookies: { type: "string" },
         "config-location": { type: "string" },
         "no-config": { type: "boolean" },
+        "playlist-items": { type: "string" },
         "no-color": { type: "boolean" },
         help: { type: "boolean", short: "h" },
         version: { type: "boolean" },
@@ -212,7 +223,7 @@ export async function main(argv: string[]): Promise<number> {
 
   const tp = createTidepull({
     http: { headers, headerHosts: values["header-host"] ?? [], userAgent: values["user-agent"], retries: num(values.retries, 3), cookies },
-    plugins: [...plugins, dash],
+    plugins: [...plugins, dash, feeds],
     ffmpeg: values["ffmpeg-location"],
   });
   tp.on(values["progress-json"] ? jsonRenderer() : humanRenderer(log, { progress: !values["no-progress"] && !values.quiet }));
@@ -243,26 +254,56 @@ export async function main(argv: string[]): Promise<number> {
   process.once("SIGINT", onSigint);
 
   let code = 0;
+
+  const report = (e: unknown, url: string) => {
+    log.error(errMsg(e));
+    if (values["progress-json"]) process.stdout.write(JSON.stringify({ type: "error", message: errMsg(e), url }) + "\n");
+    if (values.verbose && e instanceof Error && e.stack) process.stderr.write(e.stack + "\n");
+    code = Math.max(code, e instanceof TidepullError ? e.exitCode : 1);
+  };
+
+  /** What to do with one extracted item: print info, list formats, print URLs, or download it. */
+  const handle = async (info: Info, fields: Record<string, string | number>) => {
+    if (values["dump-json"]) process.stdout.write(JSON.stringify(info) + "\n");
+    else if (values["list-formats"]) {
+      log.tag("info", `Available formats for ${info.id}:`);
+      process.stdout.write(listFormats(info) + "\n");
+    } else if (values["get-url"]) {
+      const chosen = tp.select(info, opts.format);
+      if (!chosen) throw new TidepullError(`Requested format is not available: ${opts.format}`);
+      for (const f of chosen) process.stdout.write(f.url + "\n");
+    } else if (values.simulate) {
+      log.tag("info", `${info.title} (${info.formats.length} format(s))`);
+    } else if (archive?.has(info)) {
+      log.tag("download", `${info.title}: already in the archive, skipping`);
+    } else {
+      const file = await tp.download(info, { ...opts, fields, signal: ctl.signal });
+      archive?.add(info);
+      if (values["print-path"]) process.stdout.write(file + "\n");
+    }
+  };
+
   try {
     for (const url of urls) {
       try {
-        const info = await tp.extract(url, { signal: ctl.signal });
-        if (values["dump-json"]) process.stdout.write(JSON.stringify(info) + "\n");
-        else if (values["list-formats"]) {
-          log.tag("info", `Available formats for ${info.id}:`);
-          process.stdout.write(listFormats(info) + "\n");
-        } else if (values["get-url"]) {
-          const chosen = tp.select(info, opts.format);
-          if (!chosen) throw new TidepullError(`Requested format is not available: ${opts.format}`);
-          for (const f of chosen) process.stdout.write(f.url + "\n");
-        } else if (values.simulate) {
-          log.tag("info", `${info.title} (${info.formats.length} format(s))`);
-        } else if (archive?.has(info)) {
-          log.tag("download", `${info.title}: already in the archive, skipping`);
-        } else {
-          const file = await tp.download(info, { ...opts, signal: ctl.signal });
-          archive?.add(info);
-          if (values["print-path"]) process.stdout.write(file + "\n");
+        const resolved = await tp.resolve(url, { signal: ctl.signal });
+        if (isPlaylist(resolved) && (values["dump-json"] || values["list-formats"])) {
+          // listing a playlist needs no request per entry
+          if (values["dump-json"]) process.stdout.write(JSON.stringify(resolved) + "\n");
+          else {
+            log.tag("info", `${resolved.title}: ${resolved.entries.length} item(s)`);
+            process.stdout.write(listEntries(resolved) + "\n");
+          }
+          continue;
+        }
+        for await (const item of resolveItems(tp, resolved, { signal: ctl.signal, items: values["playlist-items"] })) {
+          try {
+            if (item.error) throw item.error;
+            await handle(item.info as Info, playlistFields(item));
+          } catch (e) {
+            if (ctl.signal.aborted) throw e;
+            report(e, item.entry?.url ?? url);
+          }
         }
       } catch (e) {
         if (ctl.signal.aborted) {
@@ -272,10 +313,7 @@ export async function main(argv: string[]): Promise<number> {
           code = 130;
           break;
         }
-        log.error(errMsg(e));
-        if (values["progress-json"]) process.stdout.write(JSON.stringify({ type: "error", message: errMsg(e), url }) + "\n");
-        if (values.verbose && e instanceof Error && e.stack) process.stderr.write(e.stack + "\n");
-        code = Math.max(code, e instanceof TidepullError ? e.exitCode : 1);
+        report(e, url);
       }
     }
   } finally {

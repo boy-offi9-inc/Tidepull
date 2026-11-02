@@ -9,6 +9,8 @@ export type TidepullEvent =
   | { type: "finish"; format_id: string; bytes: number; seconds: number; speed?: number }
   | { type: "merge"; output: string }
   | { type: "remux"; output: string }
+  | { type: "playlist"; title: string; count: number; selected: number }
+  | { type: "item"; index: number; position: number; total: number; url: string; title?: string }
   | { type: "done"; file: string }
   | { type: "error"; message: string; url?: string };
 

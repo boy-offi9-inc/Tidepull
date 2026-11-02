@@ -5,11 +5,11 @@ import { extOf, stem } from "./util.ts";
 const VIDEO = new Set(["mp4", "m4v", "webm", "mkv", "mov", "flv", "avi", "ts"]);
 const AUDIO = new Set(["mp3", "m4a", "aac", "ogg", "oga", "opus", "wav", "flac"]);
 
-export const directExtractor: Extractor = {
+export const directExtractor = {
   name: "direct",
   suitable: (url) => VIDEO.has(extOf(url.pathname)) || AUDIO.has(extOf(url.pathname)),
   extract: (url, ctx) => extractDirect(url, ctx),
-};
+} satisfies Extractor;
 
 export async function extractDirect(url: URL, ctx: Ctx): Promise<Info> {
   const ext = extOf(url.pathname);

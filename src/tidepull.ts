@@ -1,9 +1,9 @@
-import { downloadInfo, extractInfo, type DownloadOptions } from "./core/pipeline.ts";
+import { downloadInfo, extractInfo, resolveUrl, type DownloadOptions } from "./core/pipeline.ts";
 import { abortError } from "./core/errors.ts";
 import { makeLog, type TidepullEvent } from "./core/events.ts";
 import { Http, type HttpOptions } from "./core/http.ts";
 import { DEFAULT_FORMAT, selectFormats } from "./core/selector.ts";
-import type { Ctx, Extractor, Format, Info } from "./core/types.ts";
+import type { Ctx, Extractor, Format, Info, Playlist } from "./core/types.ts";
 import { buildRegistry } from "./extractors/index.ts";
 import type { TidepullPlugin } from "./plugins.ts";
 
@@ -19,6 +19,11 @@ export interface TidepullOptions {
 
 export interface CallOptions {
   signal?: AbortSignal;
+  /**
+   * Let headers marked secret (Authorization, tokens) be sent to this URL's origin. Default true.
+   * Pass false for URLs found inside other documents, such as playlist entries.
+   */
+  trust?: boolean;
 }
 
 /**
@@ -62,16 +67,19 @@ export class Tidepull {
     return this;
   }
 
-  private ctx(signal?: AbortSignal): Ctx {
-    const emit = (e: TidepullEvent) => {
-      for (const l of this.listeners) {
-        try {
-          l(e);
-        } catch {
-          /* listeners must not break the engine */
-        }
+  /** Publishes an event to the listeners. */
+  emit(e: TidepullEvent): void {
+    for (const l of this.listeners) {
+      try {
+        l(e);
+      } catch {
+        /* listeners must not break the engine */
       }
-    };
+    }
+  }
+
+  private ctx(signal?: AbortSignal): Ctx {
+    const emit = (e: TidepullEvent) => this.emit(e);
     return { http: this.http.scoped(signal), emit, log: makeLog(emit), extractors: this.registry, signal };
   }
 
@@ -84,13 +92,24 @@ export class Tidepull {
     }
   }
 
-  extract(url: string, o: CallOptions = {}): Promise<Info> {
+  private trustUrl(url: string, o: CallOptions): void {
+    if (o.trust === false) return;
     try {
       this.http.trust(/^[a-z][a-z0-9+.-]*:\/\//i.test(url) ? url : `https://${url}`);
     } catch {
-      /* invalid URL: extractInfo reports it */
+      /* invalid URL: the extraction step reports it */
     }
+  }
+
+  extract(url: string, o: CallOptions = {}): Promise<Info> {
+    this.trustUrl(url, o);
     return this.guard(o.signal, () => extractInfo(url, this.ctx(o.signal)));
+  }
+
+  /** Like extract(), but a playlist (feed, playlist file) comes back as a Playlist instead of an error. */
+  resolve(url: string, o: CallOptions = {}): Promise<Info | Playlist> {
+    this.trustUrl(url, o);
+    return this.guard(o.signal, () => resolveUrl(url, this.ctx(o.signal)));
   }
 
   /** Which format(s) the selector picks (two or more means merge), or undefined if none match. */

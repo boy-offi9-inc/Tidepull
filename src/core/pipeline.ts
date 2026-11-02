@@ -6,7 +6,7 @@ import { findFfmpeg, mergeStreams, remux } from "./ffmpeg.ts";
 import { Meter } from "./meter.ts";
 import { selectFormats } from "./selector.ts";
 import { renderTemplate } from "./template.ts";
-import type { Ctx, Format, Info } from "./types.ts";
+import type { Ctx, Format, Info, Playlist } from "./types.ts";
 
 export const DEFAULT_OUTPUT = "%(title)s [%(id)s].%(ext)s";
 
@@ -31,9 +31,14 @@ export interface DownloadOptions {
   headers: Record<string, string>;
   /** maximum average download speed in bytes per second (applies to each file) */
   limitRate?: number;
+  /** extra output-template fields (playlist downloads set playlist, playlist_id, playlist_index, playlist_count) */
+  fields?: Record<string, string | number>;
 }
 
-export async function extractInfo(rawUrl: string, ctx: Ctx): Promise<Info> {
+export const isPlaylist = (x: Info | Playlist): x is Playlist => (x as Playlist).kind === "playlist";
+
+/** Resolves a URL with the first matching extractor: a single item (Info) or a Playlist. */
+export async function resolveUrl(rawUrl: string, ctx: Ctx): Promise<Info | Playlist> {
   let url: URL;
   try {
     url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`);
@@ -44,9 +49,20 @@ export async function extractInfo(rawUrl: string, ctx: Ctx): Promise<Info> {
   const ex = ctx.extractors.find((e) => e.suitable(url));
   if (!ex) throw new TidepullError(`No extractor can handle ${url.href}`);
   ctx.emit({ type: "extract", extractor: ex.name, url: url.href });
-  const info = await ex.extract(url, ctx);
-  if (!info.formats?.length) throw new TidepullError(`Extractor "${ex.name}" returned no formats`);
-  return info;
+  const result = await ex.extract(url, ctx);
+  if (isPlaylist(result)) {
+    if (!result.entries?.length) throw new TidepullError(`Extractor "${ex.name}" returned an empty playlist`);
+  } else if (!result.formats?.length) throw new TidepullError(`Extractor "${ex.name}" returned no formats`);
+  return result;
+}
+
+/** Like resolveUrl, but a playlist is an error (callers that need one item). */
+export async function extractInfo(rawUrl: string, ctx: Ctx): Promise<Info> {
+  const result = await resolveUrl(rawUrl, ctx);
+  if (isPlaylist(result)) {
+    throw new TidepullError(`${rawUrl} is a playlist (${result.entries.length} items); use resolve() or pullAll() from "playlist" to download its items`);
+  }
+  return result;
 }
 
 /** Drops undefined keys so events serialize cleanly. */
@@ -69,13 +85,15 @@ export async function downloadInfo(info: Info, opts: DownloadOptions, ctx: Ctx):
   const predictedExt = merging ? opts.mergeFormat : chosen[0].ext;
   const fields = {
     ...scalars(info),
+    ...opts.fields,
     ...scalars(chosen[0]),
     format_id: chosen.map((f) => f.format_id).join("+"),
     resolution: chosen[0].height ? `${chosen[0].width ?? "?"}x${chosen[0].height}` : "audio only",
     ext: predictedExt,
   };
-  // Default name: just the title when it equals the id (direct files).
-  const template = opts.output ?? (String(info.title) === String(info.id) ? "%(title)s.%(ext)s" : DEFAULT_OUTPUT);
+  // Default name: just the title when it equals the id (direct files); playlist items get their number in front.
+  const defaultName = String(info.title) === String(info.id) ? "%(title)s.%(ext)s" : DEFAULT_OUTPUT;
+  const template = opts.output ?? (opts.fields?.playlist_index !== undefined ? `%(playlist_index)02d - ${defaultName}` : defaultName);
   let target = path.resolve(opts.paths, renderTemplate(template, fields));
   await mkdir(path.dirname(target), { recursive: true });
 

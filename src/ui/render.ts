@@ -53,6 +53,12 @@ export function humanRenderer(log: Logger, o: { progress: boolean; stream?: Node
       case "remux":
         log.tag("remux", `Remuxing to "${e.output}"`);
         break;
+      case "playlist":
+        log.tag("playlist", `${e.title}: ${e.selected} of ${e.count} item(s)`);
+        break;
+      case "item":
+        log.tag("item", `${e.position}/${e.total}${e.title ? ` ${e.title}` : ""}`);
+        break;
       case "done":
         log.tag("done", e.file);
         break;

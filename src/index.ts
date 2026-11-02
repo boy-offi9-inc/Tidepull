@@ -5,9 +5,10 @@ export type { TidepullOptions, CallOptions, Listener } from "./tidepull.ts";
 export { definePlugin, PLUGIN_API_VERSION } from "./plugins.ts";
 export type { TidepullPlugin } from "./plugins.ts";
 
-export type { Info, Format, Extractor, Ctx, Protocol } from "./core/types.ts";
+export type { Info, Format, Extractor, Ctx, Protocol, Playlist, PlaylistEntry } from "./core/types.ts";
 export type { TidepullEvent, Log } from "./core/events.ts";
 export type { DownloadOptions } from "./core/pipeline.ts";
+export { isPlaylist } from "./core/pipeline.ts";
 export type { HttpOptions } from "./core/http.ts";
 
 export { Http } from "./core/http.ts";
