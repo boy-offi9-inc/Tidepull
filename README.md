@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/logo.svg" alt="tidepull logo" width="88" height="88">
+</p>
+
 # tidepull
 
 A minimal, from-scratch media downloader **library** (and CLI) for Node. Minimal by design: a ~22 KB minified core with no runtime dependencies today (~9 KB gzip), fully typed, no terminal code in the core. Everything that isn't needed by every user is opt-in.
