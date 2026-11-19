@@ -90,6 +90,8 @@ export default definePlugin({
 ```
 Plugins run before built-ins; the generic fallback is always last. From disk: `import { loadPlugins } from "@boy-offi9-inc/tidepull/loader"` (the CLI does this for you, and bundles DASH). A plugin targeting a different `apiVersion` is refused with a clear message instead of failing mysteriously. **Plugins execute with your privileges. Only load code you trust.** See `src/extractors/_template.ts`.
 
+Ready-made site plugins live in a separate private repo, [boy-offi9-inc/tidepull-plugins](https://github.com/boy-offi9-inc/tidepull-plugins); its `docs/PLUGINS.md` is the contract a plugin must satisfy (naming, `apiVersion`, what an extractor may touch, how it is reviewed) before it can be loaded there.
+
 An extractor may instead return a `Playlist` (`{ kind: "playlist", id, title, extractor, webpage_url, entries: [{ url, title? }] }`) for a page that lists several items; each entry is then extracted on its own by the same extractors.
 
 ## CLI
@@ -112,6 +114,24 @@ tidepull --playlist-items 1-3,7 URL                # only some items (-F lists a
 **Batch and archive.** `-a FILE` reads one URL per line (`#` starts a comment, `-` reads stdin). `--download-archive FILE` records each finished item and skips it on later runs.
 
 **Config file.** Defaults go in `~/.config/tidepull/config` (or `--config-location FILE`): one or more options per line, `#` for comments, for example `-P ~/Videos` and `--limit-rate 2M`. Options on the command line win; `--no-config` ignores the file.
+
+### Terminal themes
+
+The CLI colors its output from a named theme. `--theme NAME` picks one for that run; `TIDEPULL_THEME` sets the default in your environment or config file. The flag wins over the variable.
+
+| Theme | Look | Progress glyph |
+|---|---|---|
+| `tide` (default) | cyan tags, green success, the house look | `▓` |
+| `mono` | no color, bold labels only (for pipes, CI logs, e-ink) | `#` |
+| `high-contrast` | bright, heavy colors and bold labels for low-vision use | `█` |
+| `amber` | retro CRT amber on dark | `▓` |
+
+```bash
+tidepull --theme amber -F URL
+TIDEPULL_THEME=high-contrast tidepull URL      # --theme still wins if you also pass it
+```
+
+A theme only decides *which* codes are emitted: `--no-color`, `NO_COLOR` and a non-TTY stderr still strip every escape sequence, so redirected output and CI logs stay plain text.
 
 From a clone, `node src/cli.ts <args>` runs the TypeScript source directly (Node >= 22.18); `npm run build` emits JS + `.d.ts`.
 
