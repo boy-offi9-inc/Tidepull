@@ -6,6 +6,14 @@
 
 A minimal, from-scratch media downloader **library** (and CLI) for Node. Minimal by design: a ~22 KB minified core with no runtime dependencies today (~9 KB gzip), fully typed, no terminal code in the core. Everything that isn't needed by every user is opt-in.
 
+[![npm version](https://img.shields.io/npm/v/@boy-offi9-inc/tidepull)](https://www.npmjs.com/package/@boy-offi9-inc/tidepull)
+[![npm downloads/month](https://img.shields.io/npm/dm/@boy-offi9-inc/tidepull)](https://www.npmjs.com/package/@boy-offi9-inc/tidepull)
+[![CI](https://github.com/boy-offi9-inc/Tidepull/actions/workflows/ci.yml/badge.svg)](https://github.com/boy-offi9-inc/Tidepull/actions/workflows/ci.yml)
+![Node](https://img.shields.io/badge/node-%3E%3D22.18-339933)
+![dependencies](https://img.shields.io/badge/dependencies-zero-brightgreen)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6)
+
 ## Install
 
 ```bash
@@ -56,6 +64,19 @@ const files = await pullAll(g, "https://example.com/podcast.rss", { items: "1-3,
 
 `g.resolve(url)` returns an `Info` or a `Playlist` (`isPlaylist(x)` tells you which). `g.extract(url)` still returns a single `Info` and refuses a playlist with a clear error. A failing item is thrown by default; pass `onError` to report it and continue. Template fields for playlist items: `%(playlist)s`, `%(playlist_index)02d`, `%(playlist_count)s`, `%(playlist_id)s`.
 
+## Example
+```console
+$ tidepull -F URL            # list formats
+ID        EXT  RESOLUTION  FPS  |  SIZE  TBR    PROTO  |  VCODEC   ACODEC   NOTE
+hls-600   ts   640x360          |        600k   hls    |  unknown  unknown
+hls-1200  ts   1280x720         |        1200k  hls    |  unknown  unknown
+
+$ tidepull URL -P ~/Videos
+[download] Destination: ~/Videos/master.ts
+[download] 100% of 439.45KiB in 00:00
+[done] ~/Videos/master.ts
+```
+
 ## API (everything else is internal)
 | Export | Purpose |
 |---|---|
@@ -91,6 +112,16 @@ export default definePlugin({
 Plugins run before built-ins; the generic fallback is always last. From disk: `import { loadPlugins } from "@boy-offi9-inc/tidepull/loader"` (the CLI does this for you, and bundles DASH). A plugin targeting a different `apiVersion` is refused with a clear message instead of failing mysteriously. **Plugins execute with your privileges. Only load code you trust.** See `src/extractors/_template.ts`.
 
 Ready-made site plugins live in a separate private repo, [boy-offi9-inc/tidepull-plugins](https://github.com/boy-offi9-inc/tidepull-plugins); its `docs/PLUGINS.md` is the contract a plugin must satisfy (naming, `apiVersion`, what an extractor may touch, how it is reviewed) before it can be loaded there.
+
+Ready-made plugins today: [`@boy-offi9-inc/tidepull-plugin-example`](https://github.com/boy-offi9-inc/tidepull-plugins/tree/main/plugins/example) (og:video / og:audio metas) and [`@boy-offi9-inc/tidepull-plugin-soundcloud`](https://github.com/boy-offi9-inc/tidepull-plugins/tree/main/plugins/soundcloud) (public SoundCloud tracks).
+
+### Ecosystem
+
+| Repo | Package | What it is |
+|---|---|---|
+| [Tidepull](https://github.com/boy-offi9-inc/Tidepull) (here) | `@boy-offi9-inc/tidepull` | the core: extract, select, download — zero dependencies |
+| [tidepull-plugins](https://github.com/boy-offi9-inc/tidepull-plugins) | `@boy-offi9-inc/tidepull-plugin-*` | site plugins and the authoring template, contract in its `docs/PLUGINS.md` |
+| [reqkit](https://github.com/boy-offi9-inc/reqkit) | — | transport/resilience helpers for plugin authors (planned) |
 
 An extractor may instead return a `Playlist` (`{ kind: "playlist", id, title, extractor, webpage_url, entries: [{ url, title? }] }`) for a page that lists several items; each entry is then extracted on its own by the same extractors.
 
