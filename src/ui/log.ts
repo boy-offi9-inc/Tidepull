@@ -1,10 +1,12 @@
+import type { Theme } from "./theme.ts";
+import { getTheme } from "./theme.ts";
+
 export interface LoggerOptions {
   quiet?: boolean;
   verbose?: boolean;
   color?: boolean;
+  theme?: Theme | string;
 }
-
-const C = { red: "\x1b[31m", yellow: "\x1b[33m", cyan: "\x1b[36m", dim: "\x1b[2m", reset: "\x1b[0m" };
 
 /** Honors NO_COLOR / FORCE_COLOR, and only colors a real terminal. */
 export function shouldUseColor(env: NodeJS.ProcessEnv = process.env, isTTY = !!process.stderr.isTTY): boolean {
@@ -18,25 +20,27 @@ export class Logger {
   quiet: boolean;
   verbose: boolean;
   color: boolean;
+  theme: Theme;
 
   constructor(o: LoggerOptions = {}) {
     this.quiet = o.quiet ?? false;
     this.verbose = o.verbose ?? false;
     this.color = o.color ?? false;
+    this.theme = typeof o.theme === "string" ? getTheme(o.theme) : (o.theme ?? getTheme(undefined));
   }
   private paint(c: string, s: string) {
-    return this.color ? c + s + C.reset : s;
+    return this.color ? c + s + this.theme.reset : s;
   }
   tag(tag: string, msg: string) {
-    if (!this.quiet) process.stderr.write(`${this.paint(C.cyan, `[${tag}]`)} ${msg}\n`);
+    if (!this.quiet) process.stderr.write(`${this.paint(this.theme.tag, `[${tag}]`)} ${msg}\n`);
   }
   debug(msg: string) {
-    if (this.verbose) process.stderr.write(`${this.paint(C.dim, "[debug]")} ${msg}\n`);
+    if (this.verbose) process.stderr.write(`${this.paint(this.theme.dim, "[debug]")} ${msg}\n`);
   }
   warn(msg: string) {
-    process.stderr.write(`${this.paint(C.yellow, "WARNING:")} ${msg}\n`);
+    process.stderr.write(`${this.paint(this.theme.warn, "WARNING:")} ${msg}\n`);
   }
   error(msg: string) {
-    process.stderr.write(`${this.paint(C.red, "ERROR:")} ${msg}\n`);
+    process.stderr.write(`${this.paint(this.theme.error, "ERROR:")} ${msg}\n`);
   }
 }

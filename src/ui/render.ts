@@ -1,10 +1,17 @@
 import type { TidepullEvent } from "../core/events.ts";
 import { fmtBytes, fmtTime } from "./format.ts";
 import type { Logger } from "./log.ts";
+import type { Theme } from "./theme.ts";
+import { getTheme } from "./theme.ts";
 
 /** Renders engine events as terminal output on stderr, redrawing one progress line on a TTY. */
-export function humanRenderer(log: Logger, o: { progress: boolean; stream?: NodeJS.WriteStream }): (e: TidepullEvent) => void {
+export function humanRenderer(
+  log: Logger,
+  o: { progress: boolean; stream?: NodeJS.WriteStream; theme?: Theme | string },
+): (e: TidepullEvent) => void {
   const stream = o.stream ?? process.stderr;
+  const theme = typeof o.theme === "string" ? getTheme(o.theme) : (o.theme ?? log.theme);
+  const colorize = (c: string, s: string) => (log.color ? c + s + theme.reset : s);
   const live = o.progress && !!stream.isTTY;
   let drawn = false;
   const clear = () => {
@@ -39,13 +46,13 @@ export function humanRenderer(log: Logger, o: { progress: boolean; stream?: Node
         if (line.length >= cols) line = `${pct}${size}${rate}`.trim();
         if (line.length >= cols) line = `${pct}${size}`.trim();
         if (line.length >= cols) line = (pct || fmtBytes(e.downloaded)).trim();
-        stream.write(`\r\x1b[K${line.slice(0, Math.max(1, cols - 1))}`);
+        stream.write(`\r\x1b[K${colorize(theme.progress, line.slice(0, Math.max(1, cols - 1)))}`);
         drawn = true;
         break;
       }
       case "finish":
         clear();
-        log.tag("download", `100% of ${fmtBytes(e.bytes)} in ${fmtTime(e.seconds)}${e.speed ? ` at ${fmtBytes(e.speed)}/s` : ""}`);
+        log.tag("download", colorize(theme.success, `100% of ${fmtBytes(e.bytes)} in ${fmtTime(e.seconds)}${e.speed ? ` at ${fmtBytes(e.speed)}/s` : ""}`));
         break;
       case "merge":
         log.tag("merger", `Merging formats into "${e.output}"`);
@@ -60,7 +67,7 @@ export function humanRenderer(log: Logger, o: { progress: boolean; stream?: Node
         log.tag("item", `${e.position}/${e.total}${e.title ? ` ${e.title}` : ""}`);
         break;
       case "done":
-        log.tag("done", e.file);
+        log.tag("done", colorize(theme.success, e.file));
         break;
       case "error":
         clear();

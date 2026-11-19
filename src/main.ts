@@ -15,6 +15,7 @@ import { defaultPluginDir, loadPlugins } from "./loader.ts";
 import { table, fmtBytes } from "./ui/format.ts";
 import { Logger, shouldUseColor } from "./ui/log.ts";
 import { humanRenderer, jsonRenderer } from "./ui/render.ts";
+import { pickTheme, THEME_NAMES } from "./ui/theme.ts";
 
 /** Package version, read from package.json. */
 export const VERSION: string = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
@@ -74,6 +75,7 @@ General:
       --no-progress  Disable the progress line
       --progress-json  Emit engine events as NDJSON on stdout (for GUIs/scripts)
       --no-color     Disable colors (also honors NO_COLOR)
+      --theme NAME   Output theme: ${THEME_NAMES.join(", ")} (or TIDEPULL_THEME; --theme wins)
   -h, --help         Show this help
       --version      Show version
 
@@ -149,6 +151,7 @@ export async function main(argv: string[]): Promise<number> {
         "no-config": { type: "boolean" },
         "playlist-items": { type: "string" },
         "no-color": { type: "boolean" },
+        theme: { type: "string" },
         help: { type: "boolean", short: "h" },
         version: { type: "boolean" },
       },
@@ -171,10 +174,18 @@ export async function main(argv: string[]): Promise<number> {
   if (values.help) return void process.stdout.write(HELP + "\n"), 0;
   if (values.version) return void process.stdout.write(VERSION + "\n"), 0;
 
+  let theme;
+  try {
+    theme = pickTheme(values.theme);
+  } catch (e) {
+    process.stderr.write(`ERROR: ${errMsg(e)}\n`);
+    return 2;
+  }
   const log = new Logger({
     quiet: values.quiet,
     verbose: values.verbose,
     color: !values["no-color"] && shouldUseColor(),
+    theme,
   });
   const urls = [...positionals];
   let limitRate: number | undefined;
@@ -226,7 +237,7 @@ export async function main(argv: string[]): Promise<number> {
     plugins: [...plugins, dash, feeds],
     ffmpeg: values["ffmpeg-location"],
   });
-  tp.on(values["progress-json"] ? jsonRenderer() : humanRenderer(log, { progress: !values["no-progress"] && !values.quiet }));
+  tp.on(values["progress-json"] ? jsonRenderer() : humanRenderer(log, { progress: !values["no-progress"] && !values.quiet, theme }));
   for (const p of plugins) log.debug(`Loaded plugin "${p.name}" (${p.extractors?.length ?? 0} extractor(s))`);
 
   if (values["list-extractors"]) {
