@@ -1,0 +1,73 @@
+name: Publish
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+environment: npm
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      - run: npm ci
+
+      - name: Version-bump gate
+        id: gate
+        run: |
+          local="$(node -p "require('./package.json').version")"
+          published="$(npm view @boy-offi9-inc/tidepull version 2>/dev/null || echo none)"
+          echo "local=$local" >> "$GITHUB_OUTPUT"
+          echo "published=$published" >> "$GITHUB_OUTPUT"
+          if [ "$local" = "$published" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::@boy-offi9-inc/tidepull@$local is already published — skipping publish"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Version bump: $published -> $local"
+          fi
+
+      - name: Typecheck
+        if: steps.gate.outputs.skip == 'false'
+        run: npm run typecheck
+
+      - name: Test
+        if: steps.gate.outputs.skip == 'false'
+        run: npm test
+
+      - name: Build
+        if: steps.gate.outputs.skip == 'false'
+        run: npm run build
+
+      - name: Publish
+        if: steps.gate.outputs.skip == 'false'
+        run: npm publish --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Job summary
+        run: |
+          {
+            echo "## Publish"
+            echo "- local version: \`${{ steps.gate.outputs.local }}\`"
+            echo "- latest on npm: \`${{ steps.gate.outputs.published }}\`"
+            if [ "${{ steps.gate.outputs.skip }}" = "true" ]; then
+              echo "- result: **skipped** (already published)"
+            else
+              echo "- result: **published @boy-offi9-inc/tidepull@${{ steps.gate.outputs.local }}**"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
