@@ -2,10 +2,6 @@
   <img src="docs/assets/logo.svg" alt="tidepull logo" width="88" height="88">
 </p>
 
-# tidepull
-
-A minimal, from-scratch media downloader **library** (and CLI) for Node. Minimal by design: a ~22 KB minified core with no runtime dependencies today (~9 KB gzip), fully typed, no terminal code in the core. Everything that isn't needed by every user is opt-in.
-
 [![npm version](https://img.shields.io/npm/v/@boy-offi9-inc/tidepull)](https://www.npmjs.com/package/@boy-offi9-inc/tidepull)
 [![npm downloads/month](https://img.shields.io/npm/dm/@boy-offi9-inc/tidepull)](https://www.npmjs.com/package/@boy-offi9-inc/tidepull)
 [![CI](https://github.com/boy-offi9-inc/Tidepull/actions/workflows/ci.yml/badge.svg)](https://github.com/boy-offi9-inc/Tidepull/actions/workflows/ci.yml)
@@ -13,6 +9,10 @@ A minimal, from-scratch media downloader **library** (and CLI) for Node. Minimal
 ![dependencies](https://img.shields.io/badge/dependencies-zero-brightgreen)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6)
+
+# tidepull
+
+A minimal, from-scratch media downloader **library** (and CLI) for Node. Minimal by design: a ~22 KB minified core with no runtime dependencies today (~9 KB gzip), fully typed, no terminal code in the core. Everything that isn't needed by every user is opt-in.
 
 ## Install
 
