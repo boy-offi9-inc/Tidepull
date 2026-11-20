@@ -111,7 +111,7 @@ export default definePlugin({
 ```
 Plugins run before built-ins; the generic fallback is always last. From disk: `import { loadPlugins } from "@boy-offi9-inc/tidepull/loader"` (the CLI does this for you, and bundles DASH). A plugin targeting a different `apiVersion` is refused with a clear message instead of failing mysteriously. **Plugins execute with your privileges. Only load code you trust.** See `src/extractors/_template.ts`.
 
-Ready-made site plugins live in a separate private repo, [boy-offi9-inc/tidepull-plugins](https://github.com/boy-offi9-inc/tidepull-plugins); its `docs/PLUGINS.md` is the contract a plugin must satisfy (naming, `apiVersion`, what an extractor may touch, how it is reviewed) before it can be loaded there.
+Ready-made site plugins live in the public [boy-offi9-inc/tidepull-plugins](https://github.com/boy-offi9-inc/tidepull-plugins) repo; its `docs/PLUGINS.md` is the contract a plugin must satisfy (naming, `apiVersion`, what an extractor may touch, how it is reviewed) before it can be loaded there.
 
 Ready-made plugins today: [`@boy-offi9-inc/tidepull-plugin-example`](https://github.com/boy-offi9-inc/tidepull-plugins/tree/main/plugins/example) (og:video / og:audio metas) and [`@boy-offi9-inc/tidepull-plugin-soundcloud`](https://github.com/boy-offi9-inc/tidepull-plugins/tree/main/plugins/soundcloud) (public SoundCloud tracks).
 
