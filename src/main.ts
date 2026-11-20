@@ -15,7 +15,9 @@ import { defaultPluginDir, loadPlugins } from "./loader.ts";
 import { table, fmtBytes } from "./ui/format.ts";
 import { Logger, shouldUseColor } from "./ui/log.ts";
 import { humanRenderer, jsonRenderer } from "./ui/render.ts";
+import { renderBanner } from "./ui/banner.ts";
 import { pickTheme, THEME_NAMES } from "./ui/theme.ts";
+import { Spinner } from "./ui/spinner.ts";
 
 /** Package version, read from package.json. */
 export const VERSION: string = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
@@ -181,6 +183,12 @@ export async function main(argv: string[]): Promise<number> {
     process.stderr.write(`ERROR: ${errMsg(e)}\n`);
     return 2;
   }
+  // Banner: interactive terminals only. Anything machine-facing (quiet, json,
+  // get-url, simulate, progress-json) or non-TTY stdout suppresses it.
+  const machineMode = values.quiet || values["dump-json"] || values["get-url"] || values.simulate || values["progress-json"];
+  if (process.stdout.isTTY && !machineMode) {
+    process.stderr.write(renderBanner(VERSION, theme, !values["no-color"] && shouldUseColor()) + "\n");
+  }
   const log = new Logger({
     quiet: values.quiet,
     verbose: values.verbose,
@@ -273,6 +281,14 @@ export async function main(argv: string[]): Promise<number> {
     code = Math.max(code, e instanceof TidepullError ? e.exitCode : 1);
   };
 
+  // Spinner for the resolve/extract phase: TTY stderr only, machine modes never see it.
+  const interactive = process.stdout.isTTY && !machineMode && !values["no-progress"];
+  const spinner = new Spinner({ text: "extracting…", env: process.env });
+  const spin = () => {
+    if (interactive) spinner.start();
+  };
+  const stopSpin = (final?: string) => spinner.stop(final);
+
   /** What to do with one extracted item: print info, list formats, print URLs, or download it. */
   const handle = async (info: Info, fields: Record<string, string | number>) => {
     if (values["dump-json"]) process.stdout.write(JSON.stringify(info) + "\n");
@@ -297,8 +313,10 @@ export async function main(argv: string[]): Promise<number> {
   try {
     for (const url of urls) {
       try {
+        spin();
         const resolved = await tp.resolve(url, { signal: ctl.signal });
         if (isPlaylist(resolved) && (values["dump-json"] || values["list-formats"])) {
+          stopSpin(`${resolved.title}: ${resolved.entries.length} item(s)`);
           // listing a playlist needs no request per entry
           if (values["dump-json"]) process.stdout.write(JSON.stringify(resolved) + "\n");
           else {
@@ -308,6 +326,7 @@ export async function main(argv: string[]): Promise<number> {
           continue;
         }
         for await (const item of resolveItems(tp, resolved, { signal: ctl.signal, items: values["playlist-items"] })) {
+          stopSpin();
           try {
             if (item.error) throw item.error;
             await handle(item.info as Info, playlistFields(item));
@@ -317,6 +336,7 @@ export async function main(argv: string[]): Promise<number> {
           }
         }
       } catch (e) {
+        stopSpin();
         if (ctl.signal.aborted) {
           process.stderr.write("\n");
           log.error("Interrupted by user (partial files kept, re-run to resume)");
@@ -328,6 +348,7 @@ export async function main(argv: string[]): Promise<number> {
       }
     }
   } finally {
+    stopSpin();
     process.removeListener("SIGINT", onSigint);
   }
   return code;
