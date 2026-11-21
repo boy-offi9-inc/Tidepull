@@ -110,6 +110,27 @@ high/index.m3u8
     if (p === "/hls/master.m3u8") return send(res, 200, master, "application/vnd.apple.mpegurl");
     if (p === "/hls/high/index.m3u8" || p === "/hls/low/index.m3u8") return send(res, 200, mediaPl, "application/vnd.apple.mpegurl");
     if (p === "/hls/noiv.m3u8") return send(res, 200, noivPl, "application/vnd.apple.mpegurl");
+    if (p === "/hls/br/index.m3u8") {
+      // byte-range playlist: one shared resource "blob.bin" holding 3 segments back-to-back; first has an explicit offset
+      const pl = `#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:0\n#EXT-X-BYTERANGE:20000@0\nb.ts\n#EXTINF:4.0,\n#EXT-X-BYTERANGE:20000\nb.ts\n#EXTINF:4.0,\n#EXT-X-BYTERANGE:20000\nb.ts\n#EXTINF:4.0,\n#EXT-X-ENDLIST\n`;
+      return send(res, 200, pl, "application/vnd.apple.mpegurl");
+    }
+    if (p === "/hls/br/map.m3u8") {
+      // fMP4-style: init segment + media segments, both as byte ranges of shared files
+      const pl = `#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXT-X-MAP:URI="init.bin",BYTERANGE="100@5"\n#EXTINF:4.0,\n#EXT-X-BYTERANGE:15000@0\nb.ts\n#EXTINF:4.0,\n#EXT-X-BYTERANGE:15000\nb.ts\n#EXT-X-ENDLIST\n`;
+      return send(res, 200, pl, "application/vnd.apple.mpegurl");
+    }
+    if (p === "/hls/br/b.ts" || p === "/hls/br/init.bin") {
+      const blob = Buffer.concat([randomBytes(30000), randomBytes(30000)]);
+      // serve deterministically per path+range: derive content from the requested range so tests can verify
+      const r = /^bytes=(\d+)-(\d+)$/.exec(req.headers.range ?? "");
+      if (!r) return send(res, 200, blob);
+      const start = Number(r[1]);
+      const end = Number(r[2]);
+      const chunk = blob.subarray(start, end + 1);
+      res.writeHead(206, { "content-range": `bytes ${start}-${end}/${blob.length}`, "content-length": chunk.length, "content-type": "video/mp4" });
+      return void res.end(chunk);
+    }
     if (p === "/hls/key.bin") return send(res, 200, key);
     let m = /^\/hls\/seg(\d)\.ts$/.exec(p);
     if (m) return send(res, 200, encSegs[Number(m[1])]);

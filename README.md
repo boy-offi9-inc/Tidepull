@@ -183,14 +183,14 @@ From a clone, `node src/cli.ts <args>` runs the TypeScript source directly (Node
 - No site-specific extractors are built in. Platforms such as YouTube hide their media behind scripts and tokens and need a plugin
 - No DRM: protected streams (Widevine, PlayReady, FairPlay, encrypted DASH) are not supported and will not be
 - No circumvention: it cannot get past logins, paywalls or geo-blocks. With `--cookies` it only fetches what your own session can already see
-- Not implemented yet: live streams, multi-period DASH (first period only), SAMPLE-AES, byte-range HLS/DASH, subtitles, playlists from video sites (they need a plugin), a proxy option
+- Not implemented yet: live streams, multi-period DASH (first period only), SAMPLE-AES, subtitles, playlists from video sites (they need a plugin), a proxy option
 - Cookies are read-only: `Set-Cookie` responses are not stored
 
 ### Details
 | Area | Behavior |
 |---|---|
 | Direct files | resumable (`.part` + `Range`), retries with backoff |
-| HLS VOD | master + media playlists, parallel segments written in order, AES-128 (explicit/default IV), fMP4 init maps, separate audio renditions |
+| HLS VOD | master + media playlists, parallel segments written in order, AES-128 (explicit/default IV), fMP4 init maps, `EXT-X-BYTERANGE` segments and ranged init maps, separate audio renditions |
 | DASH VOD (`.mpd`), opt-in via `@boy-offi9-inc/tidepull/dash` (built into the CLI) | `SegmentTemplate` (`$Number%05d$`, `$Time$`, timelines, durations), `SegmentList`, single-file `SegmentBase`, nested `BaseURL`; encrypted (`ContentProtection`) representations are skipped, never decrypted |
 | Generic page extractor | `og:video`, `<video>/<source>`, bare media URLs in HTML/JSON |
 | Format selector | `b bv bv* ba ba* w wv wa`, `+` merge, `/` fallback, `()` groups, `[height<=720]` `[filesize<?50M]` `[ext=mp4]` |

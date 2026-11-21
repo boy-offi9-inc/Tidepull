@@ -122,6 +122,10 @@ export interface SegmentRef {
   key?: HlsKey;
   /** init segment (fMP4); written whenever it changes */
   map?: string;
+  /** byte range within `url` (HLS EXT-X-BYTERANGE) */
+  range?: { start: number; length: number };
+  /** byte range within the init segment */
+  mapRange?: { start: number; length: number };
 }
 
 /** Fetches fragments in parallel, writes them in order (bounded memory), decrypts AES-128. Returns the container ext. */
@@ -140,18 +144,24 @@ export async function downloadSegments(segments: SegmentRef[], dest: string, o: 
     return p;
   };
 
-  const fetchBuf = async (u: string): Promise<Buffer> => {
-    const r = await o.http.request(u, { headers: o.headers, signal: o.signal });
+  const fetchBuf = async (u: string, range?: { start: number; length: number }): Promise<Buffer> => {
+    const headers: Record<string, string> = { ...o.headers };
+    if (range) headers.Range = `bytes=${range.start}-${range.start + range.length - 1}`;
+    const r = await o.http.request(u, { headers, signal: o.signal });
     if (!r.ok) {
       await r.body?.cancel();
       throw new TidepullError(`HTTP ${r.status} for segment ${u}`);
     }
-    return Buffer.from(await r.arrayBuffer());
+    const buf = Buffer.from(await r.arrayBuffer());
+    if (range && buf.length !== range.length) {
+      throw new TidepullError(`Segment byte range mismatch for ${u}: expected ${range.length} bytes, got ${buf.length}`);
+    }
+    return buf;
   };
 
   const fetchSeg = async (i: number): Promise<Buffer> => {
     const seg = segments[i];
-    let buf = await fetchBuf(seg.url);
+    let buf = await fetchBuf(seg.url, seg.range);
     if (seg.key) {
       const key = await getKey(seg.key.uri);
       let iv = seg.key.iv;
@@ -187,7 +197,7 @@ export async function downloadSegments(segments: SegmentRef[], dest: string, o: 
       inflight[i] = undefined;
       const map = segments[i].map;
       if (map && map !== lastMap) {
-        const init = await fetchBuf(map);
+        const init = await fetchBuf(map, segments[i].mapRange);
         await write(init);
         bytes += init.length;
         lastMap = map;

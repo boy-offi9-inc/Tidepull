@@ -32,6 +32,10 @@ export interface HlsSegment {
   seq: number;
   key?: HlsKey;
   map?: string;
+  /** byte range within `url` (EXT-X-BYTERANGE) */
+  range?: { start: number; length: number };
+  /** byte range within the init segment (`EXT-X-MAP` BYTERANGE attribute) */
+  mapRange?: { start: number; length: number };
 }
 export interface HlsMedia {
   segments: HlsSegment[];
@@ -106,14 +110,24 @@ export function parseMedia(text: string, base: string): HlsMedia {
   let endList = false;
   let key: HlsKey | undefined;
   let map: string | undefined;
+  let mapRange: { start: number; length: number } | undefined;
+  /** pending EXT-X-BYTERANGE: [length, offset] (offset absent => previous segment end + 1) */
+  let brLen: number | undefined;
+  let brOffset: number | undefined;
+  let lastEnd = 0; // exclusive end offset of the previous ranged segment within its resource
   const segments: HlsSegment[] = [];
 
   for (const line of ls) {
     if (line.startsWith("#EXT-X-MEDIA-SEQUENCE:")) seq = Number(val(line)) || 0;
     else if (line.startsWith("#EXTINF:")) dur = parseFloat(val(line)) || 0;
     else if (line.startsWith("#EXT-X-ENDLIST")) endList = true;
-    else if (line.startsWith("#EXT-X-BYTERANGE")) throw new TidepullError("HLS byte-range segments are not supported yet");
-    else if (line.startsWith("#EXT-X-KEY:")) {
+    else if (line.startsWith("#EXT-X-BYTERANGE")) {
+      const spec = val(line).split("@");
+      brLen = Number(spec[0]);
+      if (!brLen || brLen < 0) throw new TidepullError(`Invalid EXT-X-BYTERANGE: ${val(line)}`);
+      brOffset = spec[1] !== undefined ? Number(spec[1]) : undefined;
+      if (spec[1] !== undefined && (Number.isNaN(brOffset!) || brOffset! < 0)) throw new TidepullError(`Invalid EXT-X-BYTERANGE offset: ${val(line)}`);
+    } else if (line.startsWith("#EXT-X-KEY:")) {
       const a = parseAttributes(val(line));
       if (a.METHOD === "NONE") key = undefined;
       else if (a.METHOD === "AES-128" && a.URI) {
@@ -121,10 +135,34 @@ export function parseMedia(text: string, base: string): HlsMedia {
       } else throw new TidepullError(`Unsupported HLS encryption: ${a.METHOD}`);
     } else if (line.startsWith("#EXT-X-MAP:")) {
       const a = parseAttributes(val(line));
-      if (a.BYTERANGE) throw new TidepullError("HLS byte-range init segments are not supported yet");
       map = a.URI ? new URL(a.URI, base).href : undefined;
+      if (a.BYTERANGE) {
+        const [len, off] = a.BYTERANGE.split("@");
+        const length = Number(len);
+        const start = Number(off ?? 0);
+        if (!length || start < 0) throw new TidepullError(`Invalid EXT-X-MAP BYTERANGE: ${a.BYTERANGE}`);
+        mapRange = { start, length };
+      } else mapRange = undefined;
     } else if (!line.startsWith("#")) {
-      segments.push({ url: new URL(line, base).href, duration: dur, seq: seq + segments.length, key, map });
+      let range: { start: number; length: number } | undefined;
+      if (brLen !== undefined) {
+        const start = brOffset ?? lastEnd;
+        range = { start, length: brLen };
+        lastEnd = start + brLen;
+        brLen = undefined;
+        brOffset = undefined;
+      } else {
+        lastEnd = 0; // unranged segment resets the subsequence
+      }
+      segments.push({
+        url: new URL(line, base).href,
+        duration: dur,
+        seq: seq + segments.length,
+        key,
+        map,
+        ...(map && mapRange ? { mapRange } : {}),
+        ...(range ? { range } : {}),
+      });
       dur = 0;
     }
   }

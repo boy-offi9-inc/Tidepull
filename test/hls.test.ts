@@ -24,3 +24,17 @@ test("hls: attributes, master, media", () => {
   assert.equal(media.segments[0].map, "https://h.test/p/init.mp4");
   assert.throws(() => parseMedia("#EXTM3U\n#EXT-X-KEY:METHOD=SAMPLE-AES,URI=\"k\"\n#EXTINF:1,\na.ts\n", "https://h.test/"), /Unsupported HLS encryption/);
 });
+
+test("hls: byte-range parsing — explicit offset, implicit continuation, map range", () => {
+  const media = parseMedia(
+    '#EXTM3U\n#EXT-X-MAP:URI="init.mp4",BYTERANGE="120@40"\n#EXTINF:1,\n#EXT-X-BYTERANGE:500@1000\na.mp4\n#EXTINF:1,\n#EXT-X-BYTERANGE:600\na.mp4\n#EXTINF:1,\nb.mp4\n#EXTINF:1,\n#EXT-X-BYTERANGE:700\na.mp4\n#EXT-X-ENDLIST\n',
+    "https://h.test/p/i.m3u8",
+  );
+  assert.deepEqual(media.segments[0].range, { start: 1000, length: 500 });
+  assert.deepEqual(media.segments[1].range, { start: 1500, length: 600 }); // implicit: prev end + 1
+  assert.equal(media.segments[2].range, undefined); // unranged URI resets the subsequence
+  assert.deepEqual(media.segments[3].range, { start: 0, length: 700 }); // new resource => subsequence restarts at 0
+  assert.deepEqual(media.segments[0].mapRange, { start: 40, length: 120 });
+  assert.deepEqual(media.segments[2].mapRange, { start: 40, length: 120 }); // map persists across segments
+  assert.throws(() => parseMedia("#EXTM3U\n#EXT-X-BYTERANGE:0\na.ts\n", "https://h.test/"), /Invalid EXT-X-BYTERANGE/);
+});

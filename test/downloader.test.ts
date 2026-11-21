@@ -78,6 +78,22 @@ test("hls: default IV is the media sequence number", async () => {
   assert.ok((await readFile(dest)).equals(Buffer.concat(fx.noivSegs)));
 });
 
+test("hls: byte-range segments are fetched with Range requests and reassembled in order", async () => {
+  const dest = path.join(dir, "br.ts");
+  const { ext } = await downloadHls(`${fx.base}/hls/br/index.m3u8`, dest, { ...base, concurrency: 3 });
+  assert.equal(ext, "ts");
+  const out = await readFile(dest);
+  assert.equal(out.length, 60000); // 3 x 20000
+});
+
+test("hls: byte-range init segment (EXT-X-MAP BYTERANGE) and ranged fMP4 segments", async () => {
+  const dest = path.join(dir, "brmap.mp4");
+  const { ext } = await downloadHls(`${fx.base}/hls/br/map.m3u8`, dest, { ...base, concurrency: 2 });
+  assert.equal(ext, "mp4");
+  const out = await readFile(dest);
+  assert.equal(out.length, 100 + 30000); // init 100 bytes @5 + 2 x 15000
+});
+
 test("rate limiter: paces callers to the configured rate and honors abort", async () => {
   const limiter = new RateLimiter(1000);
   const t0 = Date.now();
