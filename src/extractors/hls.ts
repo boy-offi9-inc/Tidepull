@@ -14,8 +14,9 @@ export async function extractHls(url: URL, ctx: Ctx): Promise<Info> {
   if (!text.trimStart().startsWith("#EXTM3U")) throw new TidepullError(`Not an HLS playlist: ${url.href}`);
 
   const formats: Format[] = [];
+  let master: ReturnType<typeof parseMaster> | undefined;
   if (isMasterPlaylist(text)) {
-    const master = parseMaster(text, finalUrl);
+    master = parseMaster(text, finalUrl);
     const audioGroups = new Map<string, boolean>();
     for (const r of master.renditions) if (r.type === "AUDIO" && r.uri) audioGroups.set(r.groupId, true);
     const seen = new Set<string>();
@@ -62,9 +63,13 @@ export async function extractHls(url: URL, ctx: Ctx): Promise<Info> {
     formats.push({ format_id: "hls", url: finalUrl, ext: "ts", protocol: "hls", vcodec: "unknown", acodec: "unknown" });
   }
 
+  const subtitles = master?.renditions
+    .filter((r) => r.type === "SUBTITLES" && r.uri)
+    .map((r) => ({ lang: r.language || r.name, url: r.uri!, protocol: "hls" as const, isDefault: r.isDefault }));
+
   let name = stem(url.pathname);
   if (/^(index|master|playlist|manifest|stream|main)$/i.test(name)) {
     name = url.pathname.split("/").filter(Boolean).slice(-2, -1)[0] ?? url.hostname;
   }
-  return { id: name || url.hostname, title: name || url.hostname, extractor: "hls", webpage_url: url.href, formats };
+  return { id: name || url.hostname, title: name || url.hostname, extractor: "hls", webpage_url: url.href, formats, ...(subtitles?.length ? { subtitles } : {}) };
 }

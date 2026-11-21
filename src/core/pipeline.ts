@@ -1,6 +1,6 @@
 import { mkdir, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
-import { downloadDash, downloadHls, downloadHttp, RateLimiter, type Progress } from "./downloader.ts";
+import { downloadDash, downloadHls, downloadHlsSubtitles, downloadHttp, RateLimiter, type Progress } from "./downloader.ts";
 import { TidepullError } from "./errors.ts";
 import { findFfmpeg, mergeStreams, remux } from "./ffmpeg.ts";
 import { Meter } from "./meter.ts";
@@ -33,6 +33,8 @@ export interface DownloadOptions {
   limitRate?: number;
   /** extra output-template fields (playlist downloads set playlist, playlist_id, playlist_index, playlist_count) */
   fields?: Record<string, string | number>;
+  /** download available subtitle tracks next to the media file (`.lang.vtt`) */
+  writeSubs?: boolean;
 }
 
 export const isPlaylist = (x: Info | Playlist): x is Playlist => (x as Playlist).kind === "playlist";
@@ -75,6 +77,10 @@ const scalars = (o: object): Record<string, unknown> =>
 export async function downloadInfo(info: Info, opts: DownloadOptions, ctx: Ctx): Promise<string> {
   const chosen = selectFormats(opts.format, info.formats);
   if (!chosen) throw new TidepullError(`Requested format is not available: ${opts.format} (try --list-formats)`);
+
+  if (opts.writeSubs && !info.subtitles?.length) {
+    ctx.log.info("download", "no subtitle tracks are available for this media");
+  }
 
   const ffmpeg = findFfmpeg(opts.ffmpeg);
   const merging = chosen.length > 1;
@@ -167,5 +173,17 @@ export async function downloadInfo(info: Info, opts: DownloadOptions, ctx: Ctx):
     await rm(target, { force: true });
     target = out;
   }
+  if (opts.writeSubs && info.subtitles?.length) {
+    const stemBase = target.slice(0, target.length - path.extname(target).length);
+    for (const sub of info.subtitles) {
+      const dest = `${stemBase}.${sub.lang.replace(/\W+/g, "_")}.vtt`;
+      ctx.emit({ type: "start", format_id: `subtitle-${sub.lang}`, dest });
+      await downloadHlsSubtitles(sub.url, dest, {
+        http: ctx.http, headers: opts.headers, signal: ctx.signal, onProgress: () => {}, concurrency: 1,
+      });
+      ctx.emit({ type: "finish", format_id: `subtitle-${sub.lang}`, bytes: 0, seconds: 0 });
+    }
+  }
+
   return target;
 }

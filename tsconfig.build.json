@@ -5,6 +5,7 @@
     "outDir": "dist",
     "rootDir": "src",
     "rewriteRelativeImportExtensions": true,
+    "removeComments": true,
     "allowImportingTsExtensions": false,
     "declaration": true
   },

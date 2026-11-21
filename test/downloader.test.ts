@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, before, test } from "node:test";
-import { RateLimiter, downloadHls, downloadHttp } from "../src/core/downloader.ts";
+import { RateLimiter, downloadHls, downloadHlsSubtitles, downloadHttp } from "../src/core/downloader.ts";
 import { Http } from "../src/core/http.ts";
 import { startFixture, waitFor, type Fixture } from "./fixture.ts";
 
@@ -121,4 +121,21 @@ test("hls: a limiter applies to segment writes", async () => {
   await downloadHls(`${fx.base}/hls/high/index.m3u8`, dest, { ...base, concurrency: 3, limiter: new RateLimiter(100_000) }); // 100 KB in ~1 s
   assert.ok(Date.now() - t0 >= 850, `took ${Date.now() - t0} ms`);
   assert.ok((await readFile(dest)).equals(Buffer.concat(fx.plainSegs)));
+});
+
+test("hls: subtitles — WebVTT segments concatenated into one .vtt with a single header", async () => {
+  const dest = path.join(dir, "en.vtt");
+  await downloadHlsSubtitles(`${fx.base}/hls/subs/en.m3u8`, dest, { ...base, concurrency: 2 });
+  const out = await readFile(dest, "utf8");
+  assert.ok(out.startsWith("WEBVTT\n"), "starts with a WEBVTT header");
+  assert.equal(out.match(/WEBVTT/g)?.length, 1, "exactly one header (segment headers stripped)");
+  assert.ok(out.includes("Hello there") && out.includes("General Kenobi") && out.includes("Second part"), "cues from all segments in order");
+});
+
+test("hls: subtitles — live playlist refused", async () => {
+  // a playlist without EXT-X-ENDLIST: the fixture does not serve one; use a bad master instead
+  await assert.rejects(
+    downloadHlsSubtitles(`${fx.base}/hls/master.m3u8`, path.join(dir, "x.vtt"), { ...base, concurrency: 1 }),
+    /master playlist/,
+  );
 });

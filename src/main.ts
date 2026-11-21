@@ -63,6 +63,7 @@ Config:
 
 Network:
       --limit-rate RATE      Maximum download speed per file, e.g. 500K or 1.5M
+      --write-subs           Download subtitle tracks (HLS SUBTITLES renditions) as .vtt next to the media
       --cookies FILE         Send cookies from a Netscape cookies.txt file, only to the hosts they belong to
   -N, --concurrent-fragments N   HLS segments fetched in parallel (default: 4)
   -R, --retries N                Retries per request (default: 3)
@@ -148,6 +149,7 @@ export async function main(argv: string[]): Promise<number> {
         "batch-file": { type: "string", short: "a" },
         "download-archive": { type: "string" },
         "limit-rate": { type: "string" },
+        "write-subs": { type: "boolean" },
         cookies: { type: "string" },
         "config-location": { type: "string" },
         "no-config": { type: "boolean" },
@@ -264,6 +266,7 @@ export async function main(argv: string[]): Promise<number> {
     remuxVideo: values["remux-video"],
     headers,
     limitRate,
+    writeSubs: !!values["write-subs"],
   };
   for (const k of Object.keys(opts) as Array<keyof typeof opts>) if (opts[k] === undefined) delete opts[k];
 

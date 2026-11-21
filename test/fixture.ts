@@ -7,6 +7,7 @@ export interface Fixture {
   file: Buffer;
   plainSegs: Buffer[];
   eps: Buffer[];
+  sub1: string;
   noivSegs: Buffer[];
   files: Map<string, Buffer>;
   ranges: string[];
@@ -50,7 +51,11 @@ export async function startFixture(): Promise<Fixture> {
   const noivPl = `#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:5\n#EXT-X-KEY:METHOD=AES-128,URI="key.bin"\n${noivEnc
     .map((_, i) => `#EXTINF:4.0,\nn${i}.ts`)
     .join("\n")}\n#EXT-X-ENDLIST\n`;
+  const sub1 = "WEBVTT\n\n00:00.000 --> 00:02.000\nHello there\n\n00:02.000 --> 00:04.000\nGeneral Kenobi\n\n";
+  const sub2 = "WEBVTT\n\n00:00.000 --> 00:02.000\nSalut\n\n00:02.000 --> 00:04.000\nGenéral\n\n";
   const master = `#EXTM3U
+#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="English",LANGUAGE="en",DEFAULT=YES,URI="subs/en.m3u8"
+#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="French",LANGUAGE="fr",URI="subs/fr.m3u8"
 #EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=640x360,CODECS="avc1.4d401e,mp4a.40.2"
 low/index.m3u8
 #EXT-X-STREAM-INF:BANDWIDTH=2000000,RESOLUTION=1280x720,CODECS="avc1.640028,mp4a.40.2"
@@ -110,6 +115,15 @@ high/index.m3u8
     if (p === "/hls/master.m3u8") return send(res, 200, master, "application/vnd.apple.mpegurl");
     if (p === "/hls/high/index.m3u8" || p === "/hls/low/index.m3u8") return send(res, 200, mediaPl, "application/vnd.apple.mpegurl");
     if (p === "/hls/noiv.m3u8") return send(res, 200, noivPl, "application/vnd.apple.mpegurl");
+    if (p === "/hls/subs/en.m3u8" || p === "/hls/subs/fr.m3u8") {
+      const body = p.endsWith("en.m3u8")
+        ? `#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4.0,\nen-1.vtt\n#EXTINF:4.0,\nen-2.vtt\n#EXT-X-ENDLIST\n`
+        : `#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4.0,\nfr-1.vtt\n#EXT-X-ENDLIST\n`;
+      return send(res, 200, body, "application/vnd.apple.mpegurl");
+    }
+    if (p === "/hls/subs/en-1.vtt") return send(res, 200, sub1, "text/vtt");
+    if (p === "/hls/subs/en-2.vtt") return send(res, 200, "WEBVTT\n\n00:04.000 --> 00:06.000\nSecond part\n\n", "text/vtt");
+    if (p === "/hls/subs/fr-1.vtt") return send(res, 200, sub2, "text/vtt");
     if (p === "/hls/br/index.m3u8") {
       // byte-range playlist: one shared resource "blob.bin" holding 3 segments back-to-back; first has an explicit offset
       const pl = `#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:0\n#EXT-X-BYTERANGE:20000@0\nb.ts\n#EXTINF:4.0,\n#EXT-X-BYTERANGE:20000\nb.ts\n#EXTINF:4.0,\n#EXT-X-BYTERANGE:20000\nb.ts\n#EXTINF:4.0,\n#EXT-X-ENDLIST\n`;
@@ -203,6 +217,7 @@ high/index.m3u8
     file,
     plainSegs,
     eps,
+    sub1,
     noivSegs,
     files,
     ranges,

@@ -29,6 +29,15 @@ export interface Format {
   fragments?: string[];
 }
 
+export interface Subtitle {
+  /** language tag or track name */
+  lang: string;
+  /** subtitle playlist URL (HLS media playlist of WebVTT segments) */
+  url: string;
+  protocol: "hls";
+  isDefault?: boolean;
+}
+
 /** What every extractor returns (the "info dict"). */
 export interface Info {
   id: string;
@@ -36,6 +45,8 @@ export interface Info {
   extractor: string;
   webpage_url: string;
   formats: Format[];
+  /** available subtitle tracks (HLS SUBTITLES renditions); downloaded with --write-subs */
+  subtitles?: Subtitle[];
   thumbnail?: string;
   duration?: number;
   uploader?: string;

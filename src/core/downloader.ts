@@ -233,3 +233,47 @@ export function downloadDash(f: { init?: string; fragments?: string[] }, dest: s
   if (!f.fragments?.length) throw new TidepullError("DASH format has no fragments");
   return downloadSegments(f.fragments.map((url, seq) => ({ url, seq, map: f.init })), dest, o);
 }
+
+/** HLS subtitles: download a WebVTT segment playlist and concatenate it into one .vtt file. */
+export async function downloadHlsSubtitles(url: string, dest: string, o: HlsOpts): Promise<void> {
+  const { text, finalUrl } = await o.http.text(url, { headers: o.headers, signal: o.signal });
+  if (isMasterPlaylist(text)) throw new TidepullError("Expected a subtitle media playlist, got a master playlist");
+  const media = parseMedia(text, finalUrl);
+  if (!media.endList) throw new TidepullError("Live subtitle streams are not supported yet");
+
+  const part = dest + ".part";
+  const out = createWriteStream(part);
+  const write = (s: string) => new Promise<void>((res, rej) => out.write(s, (e) => (e ? rej(e) : res())));
+  try {
+    let header = "";
+    let lastMap: string | undefined;
+    for (const seg of media.segments) {
+      if (seg.map && seg.map !== lastMap) {
+        // fMP4 subtitle (imedia): not plain WebVTT; refuse rather than write a broken file
+        out.destroy();
+        await rm(part, { force: true });
+        throw new TidepullError("fMP4 subtitle tracks (EXT-X-MAP) are not supported yet; only WebVTT segment playlists are");
+      }
+      const r = await o.http.request(seg.url, { headers: o.headers, signal: o.signal });
+      if (!r.ok) {
+        await r.body?.cancel();
+        throw new TidepullError(`HTTP ${r.status} for subtitle segment ${seg.url}`);
+      }
+      const body = await r.text();
+      if (!header) {
+        // keep the header (WEBVTT + X-TIMESTAMP-MAP) from the first segment
+        header = body.slice(0, body.indexOf("\n\n") + 1);
+        await write(header);
+      }
+      // strip each segment's own header; keep cues
+      const cues = body.startsWith("WEBVTT") ? body.slice(body.indexOf("\n\n") + 2) : body;
+      await write(cues.endsWith("\n") ? cues : cues + "\n");
+    }
+    await new Promise<void>((res, rej) => out.end((e?: Error | null) => (e ? rej(e) : res())));
+  } catch (e) {
+    out.destroy();
+    await rm(part, { force: true });
+    throw e;
+  }
+  await rename(part, dest);
+}
