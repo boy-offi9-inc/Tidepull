@@ -4,6 +4,8 @@ import { child, kids, parseXml, type XNode } from "./xml.ts";
 
 export interface DashRep {
   id: string;
+  /** index of the Period this representation came from */
+  period: number;
   kind: "video" | "audio" | "other";
   mime: string;
   codecs?: string;
@@ -66,10 +68,12 @@ export function parseMpd(text: string, manifestUrl: string): DashManifest {
   const out: DashManifest = { reps: [], dynamic, periods: periods.length, skipped: [] };
   if (dynamic || !periods.length) return out;
 
-  const period = periods[0];
   const mpdDur = parseIsoDuration(root.attrs.mediaPresentationDuration);
+  const baseMpd = resolve(manifestUrl, child(root, "BaseURL")?.text);
+
+  for (const [pi, period] of periods.entries()) {
   const periodDur = parseIsoDuration(period.attrs.duration) ?? (periods.length === 1 ? mpdDur : undefined);
-  const baseP = resolve(resolve(manifestUrl, child(root, "BaseURL")?.text), child(period, "BaseURL")?.text);
+  const baseP = resolve(baseMpd, child(period, "BaseURL")?.text);
 
   for (const aset of kids(period, "AdaptationSet")) {
     const baseA = resolve(baseP, child(aset, "BaseURL")?.text);
@@ -86,7 +90,7 @@ export function parseMpd(text: string, manifestUrl: string): DashManifest {
         const baseR = resolve(baseA, child(rep, "BaseURL")?.text);
         const bandwidth = Number(rep.attrs.bandwidth ?? 0);
         const r: DashRep = {
-          id, kind, mime,
+          id, period: pi, kind, mime,
           codecs: rep.attrs.codecs ?? aset.attrs.codecs,
           bandwidth,
           width: Number(rep.attrs.width ?? aset.attrs.width) || undefined,
@@ -143,5 +147,6 @@ export function parseMpd(text: string, manifestUrl: string): DashManifest {
       }
     }
   }
+  } // end period loop
   return out;
 }

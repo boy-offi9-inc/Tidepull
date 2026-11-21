@@ -114,3 +114,46 @@ test("dash e2e: real ffmpeg DASH (timeline + $Number%05d$): list, download video
   assert.deepEqual(probe(merged), ["audio", "video"]);
   assert.ok(fx.seen.some((r) => r.path === "/dash/init-stream0.m4s") && fx.seen.some((r) => r.path === "/dash/chunk-stream1-00003.m4s"));
 });
+
+// A multi-period wrapper: same MPD schema, two Periods sharing the BaseURL.
+const wrap2 = (p1: string, p2: string, attrs = 'type="static" mediaPresentationDuration="PT20S"') =>
+  `<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" ${attrs}><BaseURL>media/</BaseURL><Period id="p0">${p1}</Period><Period id="p1">${p2}</Period></MPD>`;
+
+const videoRep = (id: string, dur = "PT10S") => `
+    <AdaptationSet contentType="video" mimeType="video/mp4">
+      <Representation id="${id}" bandwidth="1000000" codecs="avc1.4d401f">
+        <SegmentTemplate media="s-$Number%05d$-$Time$.m4s" initialization="i-${id}.mp4" timescale="1" duration="2">
+          <SegmentTimeline><S d="2" r="4"/></SegmentTimeline>
+        </SegmentTemplate>
+      </Representation>
+    </AdaptationSet>`;
+
+test("dash: multi-period — every period is parsed, same rep per period, extraction merges", async () => {
+  const m = parseMpd(wrap2(videoRep("v1"), videoRep("v1")), "https://h.test/m.mpd");
+  assert.equal(m.periods, 2);
+  assert.deepEqual(m.reps.map((r) => r.period), [0, 1], "one rep per period");
+  for (const r of m.reps) assert.equal(r.fragments?.length, 5, "5 fragments per period");
+  assert.notEqual(m.reps[0].fragments?.[4], m.reps[1].fragments?.[0], "period 1 starts after period 0 (timeline continues)");
+});
+
+test("dash e2e: multi-period manifest merges into one downloadable stream", { skip: !findFfmpeg() }, async () => {
+  // real ffmpeg output split into two Periods by editing the manifest: reuse the e2e media with a synthetic two-period MPD
+  const g = createTidepull({ plugins: [dash] });
+  const mpd2 = [
+    '<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static" mediaPresentationDuration="PT6S">',
+    '<Period id="p0" duration="PT2S"><AdaptationSet contentType="video" mimeType="video/mp4">',
+    '<Representation id="0" bandwidth="1" codecs="mpeg4"><SegmentTemplate media="chunk-stream0-$Number%05d$.m4s" initialization="init-stream0.m4s" timescale="90000">',
+    '<SegmentTimeline><S d="180000" r="0"/></SegmentTimeline></SegmentTemplate></Representation></AdaptationSet></Period>',
+    '<Period id="p1" duration="PT4S"><AdaptationSet contentType="video" mimeType="video/mp4">',
+    '<Representation id="0" bandwidth="1" codecs="mpeg4"><SegmentTemplate media="chunk-stream0-$Number%05d$.m4s" initialization="init-stream0.m4s" timescale="90000" startNumber="2">',
+    '<SegmentTimeline><S t="360000" d="180000" r="1"/></SegmentTimeline></SegmentTemplate></Representation></AdaptationSet></Period>',
+    "</MPD>",
+  ].join("");
+  fx.files.set("/dash/multi.mpd", Buffer.from(mpd2));
+  const info = await g.extract(`${fx.base}/dash/multi.mpd`);
+  assert.equal(info.formats.length, 1, "periods merged into one format");
+  assert.equal(info.formats[0].fragments?.length, 3, "1 chunk in period 0 + 2 chunks in period 1");
+  const dest = await g.download(info, { paths: dir, output: "multi.%(ext)s", overwrite: true });
+  const probe = execFileSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", dest]).toString().trim();
+  assert.ok(Number(probe) > 4.5, `both periods present in the merged file (duration ${probe}s)`);
+});

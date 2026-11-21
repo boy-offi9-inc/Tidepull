@@ -183,7 +183,7 @@ From a clone, `node src/cli.ts <args>` runs the TypeScript source directly (Node
 - No site-specific extractors are built in. Platforms such as YouTube hide their media behind scripts and tokens and need a plugin
 - No DRM: protected streams (Widevine, PlayReady, FairPlay, encrypted DASH) are not supported and will not be
 - No circumvention: it cannot get past logins, paywalls or geo-blocks. With `--cookies` it only fetches what your own session can already see
-- Not implemented yet: live streams, multi-period DASH (first period only), SAMPLE-AES, fMP4 subtitle tracks (WebVTT segment playlists only), playlists from video sites (they need a plugin), a proxy option
+- Not implemented yet: live streams, SAMPLE-AES, fMP4 subtitle tracks (WebVTT segment playlists only), playlists from video sites (they need a plugin), a proxy option
 - Cookies are read-only: `Set-Cookie` responses are not stored
 
 ### Details
@@ -191,7 +191,7 @@ From a clone, `node src/cli.ts <args>` runs the TypeScript source directly (Node
 |---|---|
 | Direct files | resumable (`.part` + `Range`), retries with backoff |
 | HLS VOD | master + media playlists, parallel segments written in order, AES-128 (explicit/default IV), fMP4 init maps, `EXT-X-BYTERANGE` segments and ranged init maps, separate audio renditions, `SUBTITLES` renditions with `--write-subs` (WebVTT segments joined into one `.vtt` per language) |
-| DASH VOD (`.mpd`), opt-in via `@boy-offi9-inc/tidepull/dash` (built into the CLI) | `SegmentTemplate` (`$Number%05d$`, `$Time$`, timelines, durations), `SegmentList`, single-file `SegmentBase`, nested `BaseURL`; encrypted (`ContentProtection`) representations are skipped, never decrypted |
+| DASH VOD (`.mpd`), opt-in via `@boy-offi9-inc/tidepull/dash` (built into the CLI) | `SegmentTemplate` (`$Number%05d$`, `$Time$`, timelines, durations), `SegmentList`, single-file `SegmentBase`, nested `BaseURL`; multiple `Period`s merged by representation (fragments concatenated in order, init from the first period); encrypted (`ContentProtection`) representations are skipped, never decrypted |
 | Generic page extractor | `og:video`, `<video>/<source>`, bare media URLs in HTML/JSON |
 | Format selector | `b bv bv* ba ba* w wv wa`, `+` merge, `/` fallback, `()` groups, `[height<=720]` `[filesize<?50M]` `[ext=mp4]` |
 | Output templates | `%(title)s`, `%(x\|default)s`, `%(title).50s`, `%(n)02d`, sanitized |
@@ -206,7 +206,7 @@ The core does only what every user needs: extract → select → download, event
 | Import | Files | Raw | Gzip | Minified (gzip) |
 |---|---|---|---|---|
 | `@boy-offi9-inc/tidepull` (core: direct, HLS, generic page, selector, templates, resume, merge, playlists contract) | 18 | 49.6 KB | 13.7 KB | 23 KB (9.7 KB) |
-| `@boy-offi9-inc/tidepull/dash` (adds XML + MPD parsing) | +6 | +14 KB | +4.7 KB | +6.7 KB (+3.1 KB) |
+| `@boy-offi9-inc/tidepull/dash` (adds XML + MPD parsing) | +6 | +14 KB | +4.7 KB | +7.1 KB (+3.3 KB) |
 | `@boy-offi9-inc/tidepull/feeds` (RSS/Atom + .m3u; shares the XML parser with dash) | +5 | +9 KB | +3.3 KB | +3.8 KB (+1.9 KB) |
 | `@boy-offi9-inc/tidepull/playlist` (`pullAll`, item selection) | +1 | +3.9 KB | +1.5 KB | +1.9 KB (+1.0 KB) |
 | `@boy-offi9-inc/tidepull/cookies` (cookies.txt) | +2 | +3.8 KB | +1.6 KB | +1.6 KB (+0.9 KB) |

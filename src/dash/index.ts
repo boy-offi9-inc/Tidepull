@@ -25,8 +25,13 @@ export async function extractDash(url: URL, ctx: Ctx): Promise<Info> {
   if (text.length > MAX_MPD_BYTES) throw new TidepullError("Manifest is too large");
   const mpd = parseMpd(text, finalUrl);
   if (mpd.dynamic) throw new TidepullError("Live DASH streams are not supported yet");
-  if (mpd.periods > 1) ctx.log.warn(`Manifest has ${mpd.periods} periods; only the first is used`);
   for (const s of mpd.skipped) ctx.log.warn(`Skipping representation ${s}`);
+
+  // Multi-period manifests repeat the same representations in every Period;
+  // merge them into one downloadable stream by concatenating the fragments in
+  // period order. Representations that do not exist in every period (or whose
+  // init/codec identity changes mid-stream) cannot be merged and are skipped.
+  const reps = mergePeriods(mpd.reps, mpd.periods, ctx);
 
   const seen = new Set<string>();
   const uniq = (id: string) => {
@@ -37,7 +42,7 @@ export async function extractDash(url: URL, ctx: Ctx): Promise<Info> {
   };
 
   const formats: Format[] = [];
-  for (const r of mpd.reps) {
+  for (const r of reps) {
     if (r.kind === "other") continue; // subtitles and other tracks are not supported
     const { v, a } = splitCodecs(r.codecs);
     const video = r.kind === "video";
@@ -66,6 +71,48 @@ export async function extractDash(url: URL, ctx: Ctx): Promise<Info> {
   let name = stem(url.pathname);
   if (/^(manifest|stream|index|master|playlist|main)$/i.test(name)) name = url.pathname.split("/").filter(Boolean).slice(-2, -1)[0] ?? url.hostname;
   return { id: name || url.hostname, title: name || url.hostname, extractor: "dash", webpage_url: url.href, formats };
+}
+
+/** Merges the same representation across periods: fragments concatenated in order, init from period 0. */
+function mergePeriods(reps: import("./parse.ts").DashRep[], periods: number, ctx: Ctx): import("./parse.ts").DashRep[] {
+  if (periods <= 1) return reps;
+  const byId = new Map<string, import("./parse.ts").DashRep[]>();
+  for (const r of reps) {
+    const list = byId.get(r.id) ?? [];
+    list.push(r);
+    byId.set(r.id, list);
+  }
+  const merged: import("./parse.ts").DashRep[] = [];
+  for (const [, list] of byId) {
+    if (list.length !== periods) {
+      ctx.log.warn(`Skipping representation ${list[0].id}: it does not appear in every period (${list.length}/${periods})`);
+      continue;
+    }
+    list.sort((a, b) => a.period - b.period);
+    const [first, ...rest] = list;
+    // identity must stay stable across the stream (same codecs/mime/bandwidth class)
+    if (rest.some((r) => r.mime !== first.mime || r.codecs !== first.codecs)) {
+      ctx.log.warn(`Skipping representation ${first.id}: codecs or mime type change between periods`);
+      continue;
+    }
+    // whole-file (single) representations cannot be concatenated
+    if (first.single) {
+      ctx.log.warn(`Skipping representation ${first.id}: whole-file representations cannot span periods`);
+      continue;
+    }
+    const fragments: string[] = [];
+    for (const r of list) {
+      if (!r.fragments?.length || !r.init) {
+        ctx.log.warn(`Skipping representation ${first.id}: a period has no fragment list`);
+        fragments.length = 0;
+        break;
+      }
+      fragments.push(...r.fragments);
+    }
+    if (!fragments.length) continue;
+    merged.push({ ...first, fragments, init: first.init });
+  }
+  return merged;
 }
 
 export { parseMpd };
