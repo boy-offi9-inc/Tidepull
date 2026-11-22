@@ -1,21 +1,22 @@
 import type { Theme } from "./theme.ts";
 
+/** 3-row block glyphs. Every letter is exactly 5 columns (4 glyph + 1 gap); `i` is 4. */
 const GLYPHS: Record<string, string[]> = {
-  t: ["| |_ ", "| __|", "| |_ ", " \\__|"],
-  i: ["|_ _|", " | | ", " | | ", "|___|"],
-  d: ["  __| |", " / _` |", "| (_| |", " \\__,_|"],
-  e: ["  ___ ", " / _ \\", "|  __/", " \\___|"],
-  p: ["| '_ \\ ", "| |_) |", "| .__/ ", "|_|    "],
-  u: ["| |   ", "| |   ", "| |   ", "|_|   "],
-  l: ["| |", "| |", "| |", "|_|"],
+  t: ["▀█▀  ", " █   ", " ▀   "],
+  i: ["█   ", "█   ", "▀   "],
+  d: ["█▀▀▄ ", "█  █ ", "▀▀▀▀ "],
+  e: ["█▀▀▀ ", "█▀▀  ", "▀▀▀▀ "],
+  p: ["█▀▀▄ ", "█▀▀  ", "▀  ▀ "],
+  u: ["█  █ ", "█  █ ", "▀▀▀▀ "],
+  l: ["█    ", "█    ", "▀▀▀▀ "],
 };
 
-/** Block-letter logo, assembled row by row so the letters are correct by construction. */
+/** Block-glyph logo, assembled row by row so the letters are correct by construction. */
 function logo(): string[] {
-  const rows = ["", "", "", ""];
+  const rows = ["", "", ""];
   for (const ch of "tidepull") {
     const g = GLYPHS[ch];
-    for (let r = 0; r < 4; r++) rows[r] += g[r] + (r === 0 && ch !== "l" ? " " : " ");
+    for (let r = 0; r < 3; r++) rows[r] += g[r];
   }
   return rows.map((r) => r.trimEnd());
 }
@@ -26,6 +27,6 @@ export function renderBanner(version: string, theme: Theme, color = true): strin
   const paint = (c: string, s: string) => (plain ? s : c + s + theme.reset);
   const dim = (s: string) => (plain ? s : theme.dim + s + theme.reset);
   const rows = logo();
-  rows[3] = paint(theme.accent, rows[3]) + "  " + dim(`v${version}`);
-  return rows.map((r, i) => (i === 3 ? r : paint(theme.accent, r))).join("\n");
+  rows[2] = paint(theme.accent, rows[2]) + " " + dim(`v${version}`);
+  return rows.map((r, i) => (i === 2 ? r : paint(theme.accent, r))).join("\n");
 }

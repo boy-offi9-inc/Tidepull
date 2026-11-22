@@ -37,6 +37,6 @@ test("mono theme renders plain (no color codes)", () => {
   }
 });
 
-test("banner is four lines plus the version line", () => {
-  assert.equal(renderBanner("0.4.2", THEMES.tide).split("\n").length, 4);
+test("banner is three lines (version rides the last line)", () => {
+  assert.equal(renderBanner("0.4.2", THEMES.tide).split("\n").length, 3);
 });
