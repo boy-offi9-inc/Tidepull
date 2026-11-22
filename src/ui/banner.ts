@@ -38,10 +38,7 @@ function logo(): string[] {
   return rows.map((r) => r.trimEnd());
 }
 
-const LOGO_COLS = 42; // info column starts here
-
-/** Info column: dim key / bright value pairs, fastfetch-style stat rows.
- *  Row 0 doubles as the tagline row; the version rides whichever row is free. */
+/** Info column: dim key / bright value pairs, fastfetch-style stat rows. */
 function infoLines(version: string, theme: Theme, plain: boolean, plugins: string[]): string[] {
   const dim = (s: string) => (plain ? s : theme.dim + s + theme.reset);
   const ok = (s: string) => (plain ? s : theme.success + s + theme.reset);
@@ -51,51 +48,70 @@ function infoLines(version: string, theme: Theme, plain: boolean, plugins: strin
   return rows;
 }
 
-/** Launch banner: gradient block-glyph logo + fastfetch-style info column, side by side.
- *  `plugins` (auto-detected, optional) adds a `plugins` stat row — the flex line. */
-export function renderBanner(version: string, theme: Theme, color = true, plugins: string[] = []): string {
+/** Terminal width: TTY reports it; fall back to 80 when unknown. */
+function termWidth(): number {
+  return process.stdout.columns ?? 80;
+}
+
+const visible = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "").length;
+
+/** Layout decision, computed from content + terminal width — nothing hardcoded.
+ *  side  : logo left, info right (needs logoW + gap + maxInfoW <= width)
+ *  stack : info rows UNDER the logo (narrow terminals, long plugin lists)  */
+function chooseLayout(logoWidth: number, infoWidths: number[], width: number): "side" | "stack" {
+  const maxInfo = Math.max(...infoWidths);
+  return logoWidth + 3 + maxInfo <= width - 1 ? "side" : "stack";
+}
+
+/** Launch banner: gradient block-glyph logo + fastfetch-style info column.
+ *  Auto-layouts from the real terminal width: side-by-side when it fits,
+ *  stacked info below the logo on narrow phones. `plugins` adds the flex row.
+ *  `width` overrides the detected terminal width (tests, forced layouts). */
+export function renderBanner(version: string, theme: Theme, color = true, plugins: string[] = [], width?: number): string {
   const plain = !color || !!process.env.NO_COLOR || theme.name === "mono";
   const paint = (c: string, s: string) => (plain ? s : c + s + theme.reset);
   const rows = logo();
-
-  if (plain) {
-    const info = infoLines(version, theme, true, plugins);
-    // 4 info rows but a 3-row logo: fold the plugins row under the logo.
-    const fold = info.length > 3 ? `${info[3]}  v${version}` : undefined;
-    const shown = info.slice(0, 3);
-    if (fold) shown[2] = shown[2]; // stdout row stays; fold goes below
-    const lines: string[] = [];
-    for (let r = 0; r < 3; r++) {
-      const pad = Math.max(2, LOGO_COLS - rows[r].length);
-      lines.push(rows[r] + " ".repeat(pad) + (shown[r] ?? ""));
-    }
-    if (fold) lines.push(" ".repeat(LOGO_COLS + 2) + `${info[3]}`);
-    return lines.join("\n");
-  }
-
-  const stops = gradientStops(theme);
-  // Letter column ranges in the assembled logo (before trimEnd), for per-letter paint.
-  const starts = [0, 5, 9, 14, 19, 24, 29, 34];
-  const widths = [5, 4, 5, 5, 5, 5, 5, 5];
-  const painted: string[] = ["", "", ""];
-  for (let li = 0; li < 8; li++) {
-    const c = stops[li] ?? theme.accent;
-    for (let r = 0; r < 3; r++) {
-      painted[r] += paint(c, rows[r].slice(starts[li], starts[li] + widths[li]));
-    }
-  }
-  for (let r = 0; r < 3; r++) painted[r] = painted[r].trimEnd() + theme.reset;
-
+  const logoWidth = Math.max(...rows.map((r) => r.length));
   const info = infoLines(version, theme, plain, plugins);
-  const visible = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "").length;
-  const lines: string[] = [];
-  for (let r = 0; r < 3; r++) {
-    const pad = Math.max(2, LOGO_COLS - visible(painted[r]));
-    lines.push(painted[r] + " ".repeat(pad) + (info[r] ?? ""));
+  const infoWidths = info.map(visible);
+  const w = width ?? termWidth();
+  const layout = chooseLayout(logoWidth, infoWidths, w);
+
+  // Paint the gradient logo once, for both layouts.
+  let painted: string[];
+  if (plain) {
+    painted = rows;
+  } else {
+    const stops = gradientStops(theme);
+    const starts = [0, 5, 9, 14, 19, 24, 29, 34];
+    const widths = [5, 4, 5, 5, 5, 5, 5, 5];
+    painted = ["", "", ""];
+    for (let li = 0; li < 8; li++) {
+      const c = stops[li] ?? theme.accent;
+      for (let r = 0; r < 3; r++) painted[r] += paint(c, rows[r].slice(starts[li], starts[li] + widths[li]));
+    }
+    for (let r = 0; r < 3; r++) painted[r] = painted[r].trimEnd() + theme.reset;
   }
-  if (info.length > 3) lines.push(" ".repeat(LOGO_COLS + 2) + info[3]);
-  // Wave divider, tucked under the logo — the tide motif.
-  const waveStr = " ≈≈≈≈≈≈≈≈≈≈≈";
-  lines.push(paint(plain ? "" : theme.tag, waveStr));
+
+  const lines: string[] = [];
+  if (layout === "side") {
+    // Info column starts just past the widest logo row + gap; never hardcode.
+    const col = logoWidth + 4;
+    for (let r = 0; r < 3; r++) {
+      const pad = Math.max(2, col - visible(painted[r]));
+      lines.push(painted[r] + " ".repeat(pad) + (info[r] ?? ""));
+    }
+    for (let r = 3; r < info.length; r++) lines.push(" ".repeat(col + 1) + info[r]);
+  } else {
+    // Stack: logo rows first, then info lines indented to align with the logo.
+    lines.push(...painted);
+    for (const row of info) lines.push("  " + row);
+  }
+
+  // Wave divider under everything, width-fitted — the tide motif.
+  const tag = plain ? "" : theme.tag;
+  const span = layout === "side" ? logoWidth + 4 + infoWidths[0] : logoWidth;
+  const waves = Math.max(6, Math.min(30, span - 1));
+  lines.push(paint(tag, " " + "≈".repeat(waves)));
   return lines.join("\n");
 }
