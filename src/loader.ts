@@ -1,5 +1,6 @@
 /** Loads plugins from disk (Node only). Opt-in: `import { loadPlugins } from "@boy-offi9-inc/tidepull/loader"`. */
 import { readdir, stat } from "node:fs/promises";
+import { existsSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -35,6 +36,24 @@ export async function loadPlugin(file: string): Promise<TidepullPlugin> {
 const FILE_RE = /\.(?:m?js|cjs|mts|ts)$/;
 const INDEX_RE = /^index\.(?:m?js|mts|ts)$/;
 
+/**
+ * Node emits a noisy MODULE_TYPELESS_PACKAGE_JSON warning for plugin files
+ * in a directory without a package.json ("type": "module"). Tidepull plugins
+ * are always ESM, so write that marker into the plugin dir once. The warning
+ * is cosmetic either way — loading always worked. Disable with
+ * TIDEPULL_NO_MODULE_FIX=1 (e.g. read-only config dirs).
+ */
+function ensureModuleType(dir: string): void {
+  if (process.env.TIDEPULL_NO_MODULE_FIX) return;
+  const pkg = path.join(dir, "package.json");
+  if (existsSync(pkg)) return;
+  try {
+    writeFileSync(pkg, JSON.stringify({ type: "module" }) + "\n");
+  } catch {
+    // read-only dir etc. — cosmetic only, loading still works
+  }
+}
+
 /** Each path may be a plugin file, or a directory of plugin files and/or `<name>/index.*` folders (not recursive). */
 export async function loadPlugins(paths: string[]): Promise<TidepullPlugin[]> {
   const out: TidepullPlugin[] = [];
@@ -45,8 +64,9 @@ export async function loadPlugins(paths: string[]): Promise<TidepullPlugin[]> {
       out.push(await loadPlugin(p));
       continue;
     }
+    ensureModuleType(p);
     for (const name of (await readdir(p)).sort()) {
-      if (name.startsWith("_") || name.startsWith(".") || name.endsWith(".d.ts")) continue;
+      if (name.startsWith("_") || name.startsWith(".") || name.endsWith(".d.ts") || name === "package.json") continue;
       const full = path.join(p, name);
       const fs = await stat(full);
       if (fs.isFile() && FILE_RE.test(name)) out.push(await loadPlugin(full));
