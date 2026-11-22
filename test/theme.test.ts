@@ -48,7 +48,8 @@ test("themes apply to Logger and renderer output", () => {
   assert.ok(writes[0].startsWith("\x1b[1m[info]\x1b[0m\x1b[22m"), `mono bold tag: ${JSON.stringify(writes[0])}`);
   assert.ok(writes[1].startsWith("\x1b[1mWARNING:"), `mono bold warn: ${JSON.stringify(writes[1])}`);
   assert.ok(writes[2].includes("\x1b[36m"), `tide progress colored: ${JSON.stringify(writes[2])}`);
-  assert.ok(writes[3].includes("\x1b[92m"), `tide success colored: ${JSON.stringify(writes[3])}`);
+  const done = writes[writes.length - 1];
+  assert.ok(done.includes("\x1b[36m[done]") && done.includes("out.mp4"), `tide success colored: ${JSON.stringify(done)}`);
 });
 
 test("each theme has a distinct progress glyph and all tokens are ANSI strings", () => {

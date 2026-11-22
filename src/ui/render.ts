@@ -66,9 +66,12 @@ export function humanRenderer(
       case "item":
         log.tag("item", `${e.position}/${e.total}${e.title ? ` ${e.title}` : ""}`);
         break;
-      case "done":
-        log.tag("done", colorize(theme.success, e.file));
+      case "done": {
+        clear();
+        const file = colorize(theme.success, e.file);
+        log.tag("done", file);
         break;
+      }
       case "error":
         clear();
         break;

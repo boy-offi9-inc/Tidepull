@@ -13,7 +13,7 @@ import { createTidepull } from "./tidepull.ts";
 import dash from "./dash/index.ts";
 import { defaultPluginDir, loadPlugins } from "./loader.ts";
 import { table, fmtBytes } from "./ui/format.ts";
-import { Logger, shouldUseColor } from "./ui/log.ts";
+import { Logger, shouldUseColor, sanitizeLog } from "./ui/log.ts";
 import { humanRenderer, jsonRenderer } from "./ui/render.ts";
 import { renderBanner } from "./ui/banner.ts";
 import { pickTheme, THEME_NAMES } from "./ui/theme.ts";
@@ -165,13 +165,13 @@ export async function main(argv: string[]): Promise<number> {
   try {
     args = [...configArgs(argv), ...argv];
   } catch (e) {
-    process.stderr.write(`ERROR: ${errMsg(e)}\n`);
+    process.stderr.write(`ERROR: ${sanitizeLog(errMsg(e))}\n`);
     return e instanceof TidepullError ? e.exitCode : 2;
   }
   try {
     ({ values, positionals } = parse());
   } catch (e) {
-    process.stderr.write(`ERROR: ${errMsg(e)}\nTry 'tidepull --help'.\n`);
+    process.stderr.write(`ERROR: ${sanitizeLog(errMsg(e))}\nTry 'tidepull --help'.\n`);
     return 2;
   }
 
@@ -182,7 +182,7 @@ export async function main(argv: string[]): Promise<number> {
   try {
     theme = pickTheme(values.theme);
   } catch (e) {
-    process.stderr.write(`ERROR: ${errMsg(e)}\n`);
+    process.stderr.write(`ERROR: ${sanitizeLog(errMsg(e))}\n`);
     return 2;
   }
   // Banner: interactive terminals only. Anything machine-facing (quiet, json,

@@ -15,6 +15,12 @@ export function shouldUseColor(env: NodeJS.ProcessEnv = process.env, isTTY = !!p
   return isTTY && env.TERM !== "dumb";
 }
 
+/** Strip ANSI escapes and control characters from remote-supplied text before it reaches a terminal. */
+export function sanitizeLog(s: string): string {
+  // eslint-disable-next-line no-control-regex
+  return s.replace(/\x1b(?:\[[0-9;?]*[A-Za-z]|\][^\x07\x1b]*(?:\x07|\x1b\\)|[@-Z\\-_])/g, "").replace(/[\x00-\x08\x0a-\x1f\x7f]/g, " ");
+}
+
 /** All human-facing output goes to stderr. stdout is reserved for data you can pipe. */
 export class Logger {
   quiet: boolean;
@@ -32,15 +38,15 @@ export class Logger {
     return this.color ? c + s + this.theme.reset : s;
   }
   tag(tag: string, msg: string) {
-    if (!this.quiet) process.stderr.write(`${this.paint(this.theme.tag, `[${tag}]`)} ${msg}\n`);
+    if (!this.quiet) process.stderr.write(`${this.paint(this.theme.tag, `[${tag}]`)} ${sanitizeLog(msg)}\n`);
   }
   debug(msg: string) {
-    if (this.verbose) process.stderr.write(`${this.paint(this.theme.dim, "[debug]")} ${msg}\n`);
+    if (this.verbose) process.stderr.write(`${this.paint(this.theme.dim, "[debug]")} ${sanitizeLog(msg)}\n`);
   }
   warn(msg: string) {
-    process.stderr.write(`${this.paint(this.theme.warn, "WARNING:")} ${msg}\n`);
+    process.stderr.write(`${this.paint(this.theme.warn, "WARNING:")} ${sanitizeLog(msg)}\n`);
   }
   error(msg: string) {
-    process.stderr.write(`${this.paint(this.theme.error, "ERROR:")} ${msg}\n`);
+    process.stderr.write(`${this.paint(this.theme.error, "ERROR:")} ${sanitizeLog(msg)}\n`);
   }
 }
