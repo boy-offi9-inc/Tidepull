@@ -187,10 +187,9 @@ export async function main(argv: string[]): Promise<number> {
   }
   // Banner: interactive terminals only. Anything machine-facing (quiet, json,
   // get-url, simulate, progress-json) or non-TTY stdout suppresses it.
+  // Plugins load BEFORE the banner so the banner can flex what's installed.
   const machineMode = values.quiet || values["dump-json"] || values["get-url"] || values.simulate || values["progress-json"];
-  if (process.stdout.isTTY && !machineMode) {
-    process.stderr.write(renderBanner(VERSION, theme, !values["no-color"] && shouldUseColor()) + "\n");
-  }
+  const showBanner = process.stdout.isTTY && !machineMode;
   const log = new Logger({
     quiet: values.quiet,
     verbose: values.verbose,
@@ -240,6 +239,11 @@ export async function main(argv: string[]): Promise<number> {
   } catch (e) {
     log.error(errMsg(e));
     return e instanceof TidepullError ? e.exitCode : 1;
+  }
+
+  if (showBanner) {
+    const pluginNames = plugins.map((p) => p.name);
+    process.stderr.write(renderBanner(VERSION, theme, !values["no-color"] && shouldUseColor(), pluginNames) + "\n");
   }
 
   const tp = createTidepull({

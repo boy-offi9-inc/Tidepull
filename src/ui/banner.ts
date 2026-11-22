@@ -38,26 +38,39 @@ function logo(): string[] {
   return rows.map((r) => r.trimEnd());
 }
 
-/** Info column: dim key / bright value pairs, fastfetch-style stat rows. */
-function infoLines(version: string, theme: Theme, plain: boolean): string[] {
+const LOGO_COLS = 42; // info column starts here
+
+/** Info column: dim key / bright value pairs, fastfetch-style stat rows.
+ *  Row 0 doubles as the tagline row; the version rides whichever row is free. */
+function infoLines(version: string, theme: Theme, plain: boolean, plugins: string[]): string[] {
   const dim = (s: string) => (plain ? s : theme.dim + s + theme.reset);
   const ok = (s: string) => (plain ? s : theme.success + s + theme.reset);
-  return [
-    dim("media downloader"),
-    `${dim("version")}  ${ok(`v${version}`)}`,
-    `${dim("stdout")}   ${ok("data only")}`,
-  ];
+  const tag = (s: string) => (plain ? s : theme.tag + s + theme.reset);
+  const rows = [dim("media downloader"), `${dim("version")}  ${ok(`v${version}`)}`, `${dim("stdout")}   ${ok("data only")}`];
+  if (plugins.length) rows.push(`${dim("plugins")}  ${tag(plugins.join(", "))}`);
+  return rows;
 }
 
-/** Launch banner: gradient block-glyph logo + fastfetch-style info column, side by side. */
-export function renderBanner(version: string, theme: Theme, color = true): string {
+/** Launch banner: gradient block-glyph logo + fastfetch-style info column, side by side.
+ *  `plugins` (auto-detected, optional) adds a `plugins` stat row — the flex line. */
+export function renderBanner(version: string, theme: Theme, color = true, plugins: string[] = []): string {
   const plain = !color || !!process.env.NO_COLOR || theme.name === "mono";
   const paint = (c: string, s: string) => (plain ? s : c + s + theme.reset);
   const rows = logo();
 
   if (plain) {
-    rows[2] += "  v" + version;
-    return rows.join("\n");
+    const info = infoLines(version, theme, true, plugins);
+    // 4 info rows but a 3-row logo: fold the plugins row under the logo.
+    const fold = info.length > 3 ? `${info[3]}  v${version}` : undefined;
+    const shown = info.slice(0, 3);
+    if (fold) shown[2] = shown[2]; // stdout row stays; fold goes below
+    const lines: string[] = [];
+    for (let r = 0; r < 3; r++) {
+      const pad = Math.max(2, LOGO_COLS - rows[r].length);
+      lines.push(rows[r] + " ".repeat(pad) + (shown[r] ?? ""));
+    }
+    if (fold) lines.push(" ".repeat(LOGO_COLS + 2) + `${info[3]}`);
+    return lines.join("\n");
   }
 
   const stops = gradientStops(theme);
@@ -72,14 +85,17 @@ export function renderBanner(version: string, theme: Theme, color = true): strin
     }
   }
   for (let r = 0; r < 3; r++) painted[r] = painted[r].trimEnd() + theme.reset;
-  // paint() already appended reset per segment; trailing spaces carry resets — harmless.
 
-  const info = infoLines(version, theme, plain);
+  const info = infoLines(version, theme, plain, plugins);
   const visible = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "").length;
   const lines: string[] = [];
   for (let r = 0; r < 3; r++) {
-    const pad = Math.max(2, 42 - visible(painted[r]));
+    const pad = Math.max(2, LOGO_COLS - visible(painted[r]));
     lines.push(painted[r] + " ".repeat(pad) + (info[r] ?? ""));
   }
+  if (info.length > 3) lines.push(" ".repeat(LOGO_COLS + 2) + info[3]);
+  // Wave divider, tucked under the logo — the tide motif.
+  const waveStr = " ≈≈≈≈≈≈≈≈≈≈≈";
+  lines.push(paint(plain ? "" : theme.tag, waveStr));
   return lines.join("\n");
 }

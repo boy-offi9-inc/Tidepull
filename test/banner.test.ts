@@ -37,6 +37,8 @@ test("mono theme renders plain (no color codes)", () => {
   }
 });
 
-test("banner is three lines (version rides the last line)", () => {
-  assert.equal(renderBanner("0.4.2", THEMES.tide).split("\n").length, 3);
+test("banner is three logo rows (extras fold below)", () => {
+  const out = renderBanner("0.4.2", THEMES.tide);
+  const lines = out.split("\n");
+  assert.equal(lines.length, 4); // 3 logo rows + wave divider
 });
