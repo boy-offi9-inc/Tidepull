@@ -1,6 +1,6 @@
 {
   "name": "@boy-offi9-inc/tidepull",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "description": "A minimal, from-scratch media downloader library: extractor plugins, yt-dlp-style format selection, resumable downloads.",
   "type": "module",
   "license": "MIT",
