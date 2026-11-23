@@ -110,7 +110,7 @@ export class Http {
     let cur = start;
     for (let hop = 0; ; hop++) {
       // per-request headers (Range, extractor-supplied Referer/Cookie...) only travel with the start origin; Range goes everywhere
-      const own = Object.fromEntries(Object.entries(init.headers ?? {}).filter(([k]) => cur.origin === start.origin || k.toLowerCase() === "range"));
+      const own = Object.fromEntries(Object.entries(init.headers ?? {}).filter(([k]) => cur.origin === start.origin || ["range", "user-agent"].includes(k.toLowerCase())));
       const headers: Record<string, string> = { ...this.headersFor(cur, start), ...own };
       const cookie = this.cookies?.(cur);
       if (cookie) {

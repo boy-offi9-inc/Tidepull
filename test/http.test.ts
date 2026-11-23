@@ -56,3 +56,29 @@ test("http: retries 503", async () => {
   const { text } = await new Http({ retries: 2 }).text(`${a.base}/flaky`);
   assert.equal(text, "ok");
 });
+
+test("user-agent persists across redirect hops (open header, not scoped)", async () => {
+  // extract the follow() logic indirectly: spin an Http and check via a local redirect server
+  const { createServer } = await import("node:http");
+  const seen: string[] = [];
+  const srv = createServer((req, res) => {
+    seen.push(String(req.headers["user-agent"]));
+    if (req.url === "/start") { res.writeHead(302, { location: "/final" }); res.end(); }
+    else { res.writeHead(200, { "content-type": "text/plain" }); res.end("ok"); }
+  });
+  await new Promise<void>((r) => srv.listen(0, r));
+  const port = (srv.address() as { port: number }).port;
+  try {
+    const { Http } = await import("../src/core/http.ts");
+    const h = new Http({ headerHosts: [] });
+    const res = await h.request(`http://127.0.0.1:${port}/start`, {
+      headers: { "user-agent": "TestUA/1.0" },
+    });
+    await res.text();
+    assert.equal(seen.length, 2, "both hops hit the server");
+    assert.ok(seen[0].includes("TestUA/1.0"), "start hop carries UA");
+    assert.ok(seen[1].includes("TestUA/1.0"), `redirect hop keeps UA (got: ${seen[1]})`);
+  } finally {
+    srv.close();
+  }
+});
