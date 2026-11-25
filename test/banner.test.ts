@@ -37,8 +37,25 @@ test("mono theme renders plain (no color codes)", () => {
   }
 });
 
-test("banner is three logo rows (extras fold below)", () => {
+test("banner is a box: top border with title, stat rows, bottom border", () => {
   const out = renderBanner("0.4.2", THEMES.tide);
-  const lines = out.split("\n");
-  assert.equal(lines.length, 4); // 3 logo rows + wave divider
+  const bare = out.replace(/\x1b\[[0-9;]*m/g, "").split("\n");
+  assert.equal(bare.length, 5); // top border + 3 stat rows + bottom border
+  assert.match(bare[0], /^┌/);
+  assert.match(bare[0], /⬢ tidepull/);
+  assert.match(bare[0], /┐$/);
+  assert.match(bare[bare.length - 1], /^└/);
+  assert.match(bare[bare.length - 1], /┘$/);
+  for (const row of bare.slice(1, -1)) {
+    assert.match(row, /^│/);
+    assert.match(row, /│$/);
+  }
+});
+
+test("banner stat rows carry the labeled keys", () => {
+  const out = renderBanner("0.4.2", THEMES.tide, true, ["youtube"]);
+  assert.match(out, /media downloader/);
+  assert.match(out, /stdout/);
+  assert.match(out, /plugins/);
+  assert.match(out, /youtube/);
 });

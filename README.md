@@ -164,7 +164,7 @@ TIDEPULL_THEME=high-contrast tidepull URL      # --theme still wins if you also 
 
 A theme only decides *which* codes are emitted: `--no-color`, `NO_COLOR` and a non-TTY stderr still strip every escape sequence, so redirected output and CI logs stay plain text.
 
-On an interactive terminal the CLI shows a launch banner and a spinner while resolving a URL; quiet, JSON, `-g`, simulate and non-TTY modes suppress both so piped output stays data-only.
+On an interactive terminal the CLI shows a launch banner while a download is queued and a spinner while resolving a URL; a bare call, `--help`, `--version`, quiet, JSON, `-g`, simulate and non-TTY modes show neither, so piped and one-off output stays data-only. The banner is a dash-border box (`⬢ tidepull vX.Y.Z` in the top border) with labeled stat rows — version, stdout policy, detected plugins.
 
 From a clone, `node src/cli.ts <args>` runs the TypeScript source directly (Node >= 22.18); `npm run build` emits JS + `.d.ts`.
 

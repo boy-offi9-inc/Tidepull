@@ -185,11 +185,13 @@ export async function main(argv: string[]): Promise<number> {
     process.stderr.write(`ERROR: ${sanitizeLog(errMsg(e))}\n`);
     return 2;
   }
-  // Banner: interactive terminals only. Anything machine-facing (quiet, json,
-  // get-url, simulate, progress-json) or non-TTY stdout suppresses it.
-  // Plugins load BEFORE the banner so the banner can flex what's installed.
+  // Banner gating: interactive terminals only, and only when real work is
+  // queued — a bare `tidepull` / `--help` / `--version` / list-extractors
+  // call prints nothing but the answer.
   const machineMode = values.quiet || values["dump-json"] || values["get-url"] || values.simulate || values["progress-json"];
-  const showBanner = process.stdout.isTTY && !machineMode;
+  // (urls is parsed further down; the banner gate below re-reads it then.)
+  const interactiveStdout = process.stdout.isTTY && !machineMode && !values["list-extractors"];
+  let showBanner = false;
   const log = new Logger({
     quiet: values.quiet,
     verbose: values.verbose,
@@ -241,6 +243,9 @@ export async function main(argv: string[]): Promise<number> {
     return e instanceof TidepullError ? e.exitCode : 1;
   }
 
+  // Banner shows only when real work is queued (a bare `tidepull` with no
+  // URL prints just the usage error, nothing else).
+  showBanner = interactiveStdout && urls.length > 0;
   if (showBanner) {
     const pluginNames = plugins.map((p) => p.name);
     process.stderr.write(renderBanner(VERSION, theme, !values["no-color"] && shouldUseColor(), pluginNames) + "\n");
