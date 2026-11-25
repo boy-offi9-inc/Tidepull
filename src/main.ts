@@ -115,6 +115,22 @@ function listEntries(p: Playlist): string {
   return table(rows);
 }
 
+/**
+ * Help screen: the banner box as the header, then the help text with the
+ * Usage line highlighted (accent) so the eye lands on how to call the tool.
+ * Plain (NO_COLOR/mono/non-TTY) renders without any escapes.
+ */
+function renderHelp(theme: ReturnType<typeof pickTheme>, color: boolean): string {
+  const plain = !color || !!process.env.NO_COLOR || theme.name === "mono";
+  const accent = (s: string) => (plain ? s : theme.accent + s + theme.reset);
+  const lines = HELP.split("\n");
+  return [
+    renderBanner(VERSION, theme, color),
+    "",
+    ...lines.map((l) => (l.startsWith("Usage:") ? accent(l) : l)),
+  ].join("\n");
+}
+
 export async function main(argv: string[]): Promise<number> {
   let values: ReturnType<typeof parse>["values"];
   let positionals: string[];
@@ -179,7 +195,7 @@ export async function main(argv: string[]): Promise<number> {
     return 2;
   }
 
-  if (values.help) return void process.stdout.write(HELP + "\n"), 0;
+  if (values.help) return void process.stdout.write(renderHelp(pickTheme(values.theme), !values["no-color"] && shouldUseColor()) + "\n"), 0;
   if (values.version) return void process.stdout.write(VERSION + "\n"), 0;
 
   let theme;
@@ -189,13 +205,12 @@ export async function main(argv: string[]): Promise<number> {
     process.stderr.write(`ERROR: ${sanitizeLog(errMsg(e))}\n`);
     return 2;
   }
-  // Banner gating: interactive terminals only, and only when real work is
-  // queued — a bare `tidepull` / `--help` / `--version` / list-extractors
-  // call prints nothing but the answer.
+  // Banner gating: interactive terminals see the banner on any real command —
+  // including a bare `tidepull` (followed by the usage error) and --help.
+  // Machine modes (quiet, json, get-url, simulate, progress-json) never do.
   const machineMode = values.quiet || values["dump-json"] || values["get-url"] || values.simulate || values["progress-json"];
-  // (urls is parsed further down; the banner gate below re-reads it then.)
-  const interactiveStdout = process.stdout.isTTY && !machineMode && !values["list-extractors"];
-  let showBanner = false;
+  const interactiveStdout = process.stdout.isTTY && !machineMode;
+  let showBanner = interactiveStdout;
   const log = new Logger({
     quiet: values.quiet,
     verbose: values.verbose,
@@ -247,9 +262,9 @@ export async function main(argv: string[]): Promise<number> {
     return e instanceof TidepullError ? e.exitCode : 1;
   }
 
-  // Banner shows only when real work is queued (a bare `tidepull` with no
-  // URL prints just the usage error, nothing else).
-  showBanner = interactiveStdout && urls.length > 0;
+  // Banner renders once, right before the first output it frames (or the
+  // usage error for a bare call). list-extractors keeps its stdout data-only.
+  showBanner = interactiveStdout && !values["list-extractors"];
   if (showBanner) {
     const pluginNames = plugins.map((p) => p.name);
     process.stderr.write(renderBanner(VERSION, theme, !values["no-color"] && shouldUseColor(), pluginNames) + "\n");
