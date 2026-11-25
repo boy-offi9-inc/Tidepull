@@ -57,6 +57,9 @@ export function humanRenderer(
       case "merge":
         log.tag("merger", `Merging formats into "${e.output}"`);
         break;
+      case "extract-audio":
+        log.tag("audio", `Extracting audio to "${e.output}"`);
+        break;
       case "remux":
         log.tag("remux", `Remuxing to "${e.output}"`);
         break;

@@ -8,6 +8,7 @@ export type TidepullEvent =
   | { type: "progress"; format_id: string; downloaded: number; total?: number; estimated?: boolean; speed?: number; eta?: number }
   | { type: "finish"; format_id: string; bytes: number; seconds: number; speed?: number }
   | { type: "merge"; output: string }
+  | { type: "extract-audio"; output: string }
   | { type: "remux"; output: string }
   | { type: "playlist"; title: string; count: number; selected: number }
   | { type: "item"; index: number; position: number; total: number; url: string; title?: string }

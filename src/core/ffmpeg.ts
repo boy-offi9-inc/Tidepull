@@ -38,3 +38,18 @@ export const mergeStreams = (bin: string, video: string, audio: string, out: str
   run(bin, ["-i", video, "-i", audio, "-map", "0:v:0", "-map", "1:a:0", "-c", "copy", out]);
 
 export const remux = (bin: string, input: string, out: string) => run(bin, ["-i", input, "-c", "copy", out]);
+
+/** Extract the audio track into a dedicated audio container (mp3, m4a, opus, ...). */
+export const extractAudio = (bin: string, input: string, out: string, format: string) =>
+  run(bin, ["-i", input, "-vn", "-c:a", audioCodec(format), out]);
+
+const AUDIO_CODECS: Record<string, string> = {
+  mp3: "libmp3lame", m4a: "aac", opus: "libopus", ogg: "libvorbis", flac: "flac", wav: "pcm_s16le", best: "copy",
+};
+
+/** ffmpeg codec name for a target audio container ("best" keeps the source codec). */
+function audioCodec(format: string): string {
+  const c = AUDIO_CODECS[format];
+  if (!c) throw new TidepullError(`Unsupported audio format: ${format} (available: ${Object.keys(AUDIO_CODECS).join(", ")})`, 2);
+  return c;
+}

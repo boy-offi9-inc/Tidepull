@@ -199,13 +199,14 @@ From a clone, `node src/cli.ts <args>` runs the TypeScript source directly (Node
 | Cookies | Netscape `cookies.txt`; matched by domain, path, `Secure` and expiry; re-evaluated on every redirect hop |
 | CLI conveniences | `-a` batch input, `--download-archive`, `--limit-rate`, `--config-location` |
 | Merge / remux | ffmpeg |
+| Audio extraction | `-x` pulls the audio track into its own container with ffmpeg (`--audio-format`: mp3, m4a, opus, ogg, flac, wav, `best`); with no explicit `--format` the selector defaults to `ba/b` |
 
 ## Footprint (enforced in CI)
 The core does only what every user needs: extract → select → download, events, cancellation. Everything else is a plugin or an opt-in subpath.
 
 | Import | Files | Raw | Gzip | Minified (gzip) |
 |---|---|---|---|---|
-| `@boy-offi9-inc/tidepull` (core: direct, HLS, generic page, selector, templates, resume, merge, playlists contract) | 18 | 49.6 KB | 13.7 KB | 23 KB (9.7 KB) |
+| `@boy-offi9-inc/tidepull` (core: direct, HLS, generic page, selector, templates, resume, merge, audio extraction, playlists contract) | 18 | 50.5 KB | 14.0 KB | 23 KB (9.7 KB) |
 | `@boy-offi9-inc/tidepull/dash` (adds XML + MPD parsing) | +6 | +14 KB | +4.7 KB | +7.1 KB (+3.3 KB) |
 | `@boy-offi9-inc/tidepull/feeds` (RSS/Atom + .m3u; shares the XML parser with dash) | +5 | +9 KB | +3.3 KB | +3.8 KB (+1.9 KB) |
 | `@boy-offi9-inc/tidepull/playlist` (`pullAll`, item selection) | +1 | +3.9 KB | +1.5 KB | +1.9 KB (+1.0 KB) |

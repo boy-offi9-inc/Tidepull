@@ -2,7 +2,7 @@ import { mkdir, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { downloadDash, downloadHls, downloadHlsSubtitles, downloadHttp, RateLimiter, type Progress } from "./downloader.ts";
 import { TidepullError } from "./errors.ts";
-import { findFfmpeg, mergeStreams, remux } from "./ffmpeg.ts";
+import { findFfmpeg, mergeStreams, remux, extractAudio } from "./ffmpeg.ts";
 import { Meter } from "./meter.ts";
 import { selectFormats } from "./selector.ts";
 import { renderTemplate } from "./template.ts";
@@ -25,6 +25,8 @@ export interface DownloadOptions {
   /** container used when merging video+audio */
   mergeFormat: string;
   remuxVideo?: string;
+  /** extract the audio track into its own container (mp3, m4a, opus, ogg, flac, wav, best) */
+  extractAudio?: string;
   /** ffmpeg binary or its directory (default: search PATH) */
   ffmpeg?: string;
   /** extra request headers for the media downloads */
@@ -87,6 +89,11 @@ export async function downloadInfo(info: Info, opts: DownloadOptions, ctx: Ctx):
   if (merging && !ffmpeg) {
     throw new TidepullError(`ffmpeg is required to merge ${chosen.map((f) => f.format_id).join("+")}. Install it, or pick one format (-f b).`);
   }
+  if (opts.extractAudio && !ffmpeg) {
+    throw new TidepullError("ffmpeg is required for --extract-audio. Install it, or drop -x.");
+  }
+  // Audio extraction defaults to an audio-only format selector when the caller
+  // did not pass --format explicitly; an explicit --format is respected.
 
   const predictedExt = merging ? opts.mergeFormat : chosen[0].ext;
   const fields = {
@@ -163,6 +170,16 @@ export async function downloadInfo(info: Info, opts: DownloadOptions, ctx: Ctx):
     } finally {
       await Promise.all(tmp.map((t) => rm(t, { force: true })));
     }
+  }
+
+  // Audio extraction: pull the audio track out into its own container. Runs
+  // after merge (the merged file carries the audio) or on a single download.
+  if (opts.extractAudio) {
+    const out = `${base}.${opts.extractAudio === "best" ? "mka" : opts.extractAudio}`;
+    ctx.emit({ type: "extract-audio", output: out });
+    await extractAudio(ffmpeg!, target, out, opts.extractAudio);
+    await rm(target, { force: true });
+    target = out;
   }
 
   if (opts.remuxVideo && path.extname(target).slice(1) !== opts.remuxVideo) {

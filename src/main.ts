@@ -40,6 +40,8 @@ Output:
       --no-continue          Do not resume partial downloads
       --merge-output-format  Container when merging video+audio (default: mp4)
       --remux-video EXT      Remux the result into EXT with ffmpeg (e.g. mp4)
+  -x, --extract-audio        Extract the audio track into an audio file (ffmpeg required)
+      --audio-format FORMAT  Audio container for -x: mp3, m4a, opus, ogg, flac, wav, best (default: best)
       --ffmpeg-location PATH ffmpeg binary or directory
 
 Info only (nothing is downloaded):
@@ -129,6 +131,8 @@ export async function main(argv: string[]): Promise<number> {
         "no-continue": { type: "boolean" },
         "merge-output-format": { type: "string" },
         "remux-video": { type: "string" },
+        "extract-audio": { type: "boolean", short: "x" },
+        "audio-format": { type: "string" },
         "ffmpeg-location": { type: "string" },
         "dump-json": { type: "boolean", short: "j" },
         "get-url": { type: "boolean", short: "g" },
@@ -265,7 +269,8 @@ export async function main(argv: string[]): Promise<number> {
   }
 
   const opts: Partial<DownloadOptions> = {
-    format: values.format ?? DEFAULT_FORMAT,
+    // -x with no explicit --format targets the audio track
+    format: values.format ?? (values["extract-audio"] ? "ba/b" : DEFAULT_FORMAT),
     output: values.output,
     paths: values.paths,
     resume: !values["no-continue"],
@@ -273,6 +278,7 @@ export async function main(argv: string[]): Promise<number> {
     concurrency: Math.max(1, num(values["concurrent-fragments"], 4)),
     mergeFormat: values["merge-output-format"],
     remuxVideo: values["remux-video"],
+    extractAudio: values["extract-audio"] ? (values["audio-format"] ?? "best") : undefined,
     headers,
     limitRate,
     writeSubs: !!values["write-subs"],
