@@ -119,3 +119,70 @@ test("resolveItems: already-resolved sources work, and cancellation stops the it
   ctl.abort();
   await assert.rejects(pullAll(tp, `${fx.base}/feed.xml`, { paths: path.join(dir, "aborted"), signal: ctl.signal }), (e: Error) => e.name === "AbortError");
 });
+
+
+test("pullAll: concurrency caps in-flight downloads and keeps item order", async () => {
+  const tp = createTidepull({ plugins: [feeds] });
+  let inFlight = 0;
+  let maxInFlight = 0;
+  const orig = tp.download.bind(tp);
+  (tp as unknown as { download: unknown }).download = async (info: Parameters<typeof orig>[0], o: Parameters<typeof orig>[1]) => {
+    inFlight++;
+    maxInFlight = Math.max(maxInFlight, inFlight);
+    await new Promise((r) => setTimeout(r, 25));
+    try {
+      return await orig(info, o);
+    } finally {
+      inFlight--;
+    }
+  };
+  const files = await pullAll(tp, `${fx.base}/feed.xml`, { paths: path.join(dir, "conc"), concurrency: 3 });
+  assert.ok(maxInFlight > 1 && maxInFlight <= 3, `max in-flight was ${maxInFlight}`);
+  assert.deepEqual(files.map((f) => path.basename(f)), [
+    "01 - Episode one.mp3",
+    "02 - Episode two.mp3",
+    "03 - Episode_ three_.mp3",
+  ]);
+  await same(files[0], fx.eps[0]);
+  await same(files[2], fx.eps[2]);
+});
+
+test("pullAll: the default stays strictly sequential", async () => {
+  const tp = createTidepull({ plugins: [feeds] });
+  let inFlight = 0;
+  let maxInFlight = 0;
+  const orig = tp.download.bind(tp);
+  (tp as unknown as { download: unknown }).download = async (info: Parameters<typeof orig>[0], o: Parameters<typeof orig>[1]) => {
+    inFlight++;
+    maxInFlight = Math.max(maxInFlight, inFlight);
+    await new Promise((r) => setTimeout(r, 10));
+    try {
+      return await orig(info, o);
+    } finally {
+      inFlight--;
+    }
+  };
+  await pullAll(tp, `${fx.base}/feed.xml`, { paths: path.join(dir, "seq"), items: "1-3" });
+  assert.equal(maxInFlight, 1);
+});
+
+test("pullAll: concurrency keeps onError semantics and file order across a failing item", async () => {
+  const tp = createTidepull({ plugins: [feeds] });
+  const errors: string[] = [];
+  const files = await pullAll(tp, `${fx.base}/feed-broken.xml`, {
+    paths: path.join(dir, "conc-broken"),
+    concurrency: 3,
+    onError: (e, item) => errors.push(`${item.index}: ${e.message}`),
+  });
+  assert.deepEqual(files.map((f) => path.basename(f)), ["01 - Good one.mp3", "03 - Good two.mp3"]);
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /^2: .*404/);
+  await assert.rejects(pullAll(tp, `${fx.base}/feed-broken.xml`, { paths: path.join(dir, "conc-thrown"), concurrency: 3 }), /404/);
+});
+
+test("pullAll: concurrency must be an integer >= 1", async () => {
+  const tp = createTidepull({ plugins: [feeds] });
+  for (const bad of [0, -1, 1.5, Number.NaN]) {
+    await assert.rejects(pullAll(tp, `${fx.base}/feed.xml`, { paths: path.join(dir, "bad"), concurrency: bad }), exit2, String(bad));
+  }
+});

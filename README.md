@@ -62,7 +62,7 @@ const files = await pullAll(g, "https://example.com/podcast.rss", { items: "1-3,
 // "01 - Episode title.mp3", "02 - ...": the number and the title come from the playlist
 ```
 
-`g.resolve(url)` returns an `Info` or a `Playlist` (`isPlaylist(x)` tells you which). `g.extract(url)` still returns a single `Info` and refuses a playlist with a clear error. A failing item is thrown by default; pass `onError` to report it and continue. Template fields for playlist items: `%(playlist)s`, `%(playlist_index)02d`, `%(playlist_count)s`, `%(playlist_id)s`.
+`g.resolve(url)` returns an `Info` or a `Playlist` (`isPlaylist(x)` tells you which). `g.extract(url)` still returns a single `Info` and refuses a playlist with a clear error. A failing item is thrown by default; pass `onError` to report it and continue. Template fields for playlist items: `%(playlist)s`, `%(playlist_index)02d`, `%(playlist_count)s`, `%(playlist_id)s`. To download several items at once, pass `concurrency` (an integer ≥ 1, default 1); only the downloads run in parallel — items are still extracted in order and the returned files keep item order.
 
 ## Example
 ```console

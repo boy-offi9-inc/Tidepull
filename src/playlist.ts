@@ -90,20 +90,82 @@ export interface PullAllOptions extends Partial<DownloadOptions>, CallOptions {
   items?: string;
   /** called for an item that fails; without it the first failure is thrown */
   onError?: (error: Error, item: PlaylistItem) => void;
+  /** how many items to download at once (default 1). Only downloads run in parallel; items are always extracted in order, and the returned files keep item order. */
+  concurrency?: number;
 }
 
 /** Downloads a single item, or every selected entry of a playlist, and returns the files in order. */
 export async function pullAll(tp: Tidepull, source: string, o: PullAllOptions = {}): Promise<string[]> {
-  const { items, onError, ...rest } = o;
-  const files: string[] = [];
-  for await (const item of resolveItems(tp, source, { items, signal: o.signal, trust: o.trust })) {
-    try {
-      if (item.error) throw item.error;
-      files.push(await tp.download(item.info as Info, { ...rest, fields: { ...rest.fields, ...playlistFields(item) } }));
-    } catch (e) {
-      if (o.signal?.aborted || !onError) throw e;
-      onError(e as Error, item);
-    }
+  const { items, onError, concurrency = 1, ...rest } = o;
+  const limit = concurrency === undefined ? 1 : Math.floor(concurrency);
+  if (limit !== concurrency || limit < 1) {
+    throw new TidepullError(`Invalid playlist concurrency ${concurrency} (an integer >= 1)`, 2);
   }
-  return files;
+  if (limit === 1) {
+    const files: string[] = [];
+    for await (const item of resolveItems(tp, source, { items, signal: o.signal, trust: o.trust })) {
+      try {
+        if (item.error) throw item.error;
+        files.push(await tp.download(item.info as Info, { ...rest, fields: { ...rest.fields, ...playlistFields(item) } }));
+      } catch (e) {
+        if (o.signal?.aborted || !onError) throw e;
+        onError(e as Error, item);
+      }
+    }
+    return files;
+  }
+  // Bounded pool: a feeder walks the playlist in order and dispatches a download whenever a slot is
+  // free; finished slots are never reordered. Without onError the first failure is thrown once the
+  // in-flight downloads settle, matching the sequential behavior.
+  const iterator = resolveItems(tp, source, { items, signal: o.signal, trust: o.trust });
+  const slots: (string | undefined)[] = [];
+  let nextSlot = 0;
+  let firstFailure: Error | undefined;
+  let inFlight = 0;
+  let exhausted = false;
+  await new Promise<void>((resolve, reject) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      if (firstFailure) reject(firstFailure);
+      else resolve();
+    };
+    const launch = (item: PlaylistItem) => {
+      const slot = nextSlot++;
+      inFlight++;
+      void (async () => {
+        try {
+          if (item.error) throw item.error;
+          slots[slot] = await tp.download(item.info as Info, { ...rest, fields: { ...rest.fields, ...playlistFields(item) } });
+        } catch (e) {
+          if (o.signal?.aborted || !onError) firstFailure ??= e as Error;
+          else onError(e as Error, item);
+        } finally {
+          inFlight--;
+          pump();
+        }
+      })();
+    };
+    const pump = () => {
+      void (async () => {
+        try {
+          while (!exhausted && !firstFailure && !o.signal?.aborted && inFlight < limit) {
+            const step = await iterator.next();
+            if (step.done) {
+              exhausted = true;
+              break;
+            }
+            launch(step.value);
+          }
+        } catch (e) {
+          // resolve() itself failed, or the abort signal fired between items
+          firstFailure ??= e as Error;
+        }
+        if (inFlight === 0 && (exhausted || firstFailure || o.signal?.aborted)) finish();
+      })();
+    };
+    pump();
+  });
+  return slots.filter((f): f is string => f !== undefined);
 }
